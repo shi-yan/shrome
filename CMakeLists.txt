@@ -67,18 +67,18 @@ endmacro()
 find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3)
 
 print_all_variables()
-# cefsimple sources.
-set(CEFSIMPLE_SRCS
+# SHROME sources.
+set(SHROME_SRCS
   simple_app.cc
   simple_app.h
   simple_handler.cc
   simple_handler.h
   )
-set(CEFSIMPLE_SRCS_LINUX
+set(SHROME_SRCS_LINUX
   cefsimple_linux.cc
   simple_handler_linux.cc
   )
-set(CEFSIMPLE_SRCS_MAC
+set(SHROME_SRCS_MAC
   #cefsimple_mac.mm
   #cefsimple_offscreen.cc
   simple_handler_mac.mm
@@ -93,50 +93,50 @@ set(CEFSIMPLE_SRCS_MAC
   main.mm
   mycef.cpp
   )
-set(CEFSIMPLE_SRCS_WINDOWS
+set(SHROME_SRCS_WINDOWS
   cefsimple_win.cc
   resource.h
   simple_handler_win.cc
   )
-APPEND_PLATFORM_SOURCES(CEFSIMPLE_SRCS)
-source_group(cefsimple FILES ${CEFSIMPLE_SRCS})
+APPEND_PLATFORM_SOURCES(SHROME_SRCS)
+source_group(shrome FILES ${SHROME_SRCS})
 
-set(CEFSIMPLE_WIN_SRCS_WINDOWS
+set(SHROME_WIN_SRCS_WINDOWS
   win/cefsimple.rc
   )
-APPEND_PLATFORM_SOURCES(CEFSIMPLE_WIN_SRCS)
-source_group(cefsimple\\\\win FILES ${CEFSIMPLE_WIN_SRCS})
+APPEND_PLATFORM_SOURCES(SHROME_WIN_SRCS)
+source_group(shrome\\\\win FILES ${SHROME_WIN_SRCS})
 
-set(CEFSIMPLE_SRCS
-  ${CEFSIMPLE_SRCS}
-  ${CEFSIMPLE_WIN_SRCS}
+set(SHROME_SRCS
+  ${SHROME_SRCS}
+  ${SHROME_WIN_SRCS}
   )
 
-# cefsimple helper sources.
-set(CEFSIMPLE_HELPER_SRCS_MAC
+# SHROME helper sources.
+set(SHROME_HELPER_SRCS_MAC
   process_helper_mac.cc
   )
-APPEND_PLATFORM_SOURCES(CEFSIMPLE_HELPER_SRCS)
-source_group(cefsimple FILES ${CEFSIMPLE_HELPER_SRCS})
+APPEND_PLATFORM_SOURCES(SHROME_HELPER_SRCS)
+source_group(shrome FILES ${SHROME_HELPER_SRCS})
 
-# cefsimple resources.
-set(CEFSIMPLE_RESOURCES_MAC_SRCS_MAC
+# SHROME resources.
+set(SHROME_RESOURCES_MAC_SRCS_MAC
   mac/Info.plist.in
-  mac/cefsimple.icns
+  mac/shrome.icns
   )
-APPEND_PLATFORM_SOURCES(CEFSIMPLE_RESOURCES_MAC_SRCS)
-source_group(cefsimple\\\\mac FILES ${CEFSIMPLE_RESOURCES_MAC_SRCS})
+APPEND_PLATFORM_SOURCES(SHROME_RESOURCES_MAC_SRCS)
+source_group(shrome\\\\mac FILES ${SHROME_RESOURCES_MAC_SRCS})
 
-set(CEFSIMPLE_RESOURCES_MAC_ENGLISH_LPROJ_SRCS_MAC
+set(SHROME_RESOURCES_MAC_ENGLISH_LPROJ_SRCS_MAC
   mac/English.lproj/InfoPlist.strings
   mac/English.lproj/MainMenu.xib
   )
-APPEND_PLATFORM_SOURCES(CEFSIMPLE_RESOURCES_MAC_ENGLISH_LPROJ_SRCS)
-source_group(cefsimple\\\\mac\\\\English.lproj FILES ${CEFSIMPLE_RESOURCES_MAC_ENGLISH_LPROJ_SRCS})
+APPEND_PLATFORM_SOURCES(SHROME_RESOURCES_MAC_ENGLISH_LPROJ_SRCS)
+source_group(shrome\\\\mac\\\\English.lproj FILES ${SHROME_RESOURCES_MAC_ENGLISH_LPROJ_SRCS})
 
-set(CEFSIMPLE_RESOURCES_SRCS
-  ${CEFSIMPLE_RESOURCES_MAC_SRCS}
-  ${CEFSIMPLE_RESOURCES_MAC_ENGLISH_LPROJ_SRCS}
+set(SHROME_RESOURCES_SRCS
+  ${SHROME_RESOURCES_MAC_SRCS}
+  ${SHROME_RESOURCES_MAC_ENGLISH_LPROJ_SRCS}
   )
 
 
@@ -145,10 +145,10 @@ set(CEFSIMPLE_RESOURCES_SRCS
 #
 
 # Target executable names.
-set(CEF_TARGET "cefsimple")
+set(CEF_TARGET "shrome")
 if(OS_MAC)
-  set(CEF_HELPER_TARGET "cefsimple_Helper")
-  set(CEF_HELPER_OUTPUT_NAME "cefsimple Helper")
+  set(CEF_HELPER_TARGET "shrome_Helper")
+  set(CEF_HELPER_OUTPUT_NAME "shrome Helper")
 else()
   # Logical target used to link the libcef library.
   ADD_LOGICAL_TARGET("libcef_lib" "${CEF_LIB_DEBUG}" "${CEF_LIB_RELEASE}")
@@ -164,7 +164,7 @@ SET_CEF_TARGET_OUT_DIR()
 
 if(OS_LINUX)
   # Executable target.
-  add_executable(${CEF_TARGET} ${CEFSIMPLE_SRCS})
+  add_executable(${CEF_TARGET} ${SHROME_SRCS})
   SET_EXECUTABLE_TARGET_PROPERTIES(${CEF_TARGET})
   add_dependencies(${CEF_TARGET} libcef_dll_wrapper)
   target_link_libraries(${CEF_TARGET} libcef_lib libcef_dll_wrapper ${CEF_STANDARD_LIBS}  SDL3::SDL3)
@@ -236,7 +236,7 @@ string(REPLACE "-Werror" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 string(REPLACE "-Werror" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 
   # Main app bundle target.
-  add_executable(${CEF_TARGET} MACOSX_BUNDLE ${CEFSIMPLE_RESOURCES_SRCS} ${CEFSIMPLE_SRCS})
+  add_executable(${CEF_TARGET} MACOSX_BUNDLE ${SHROME_RESOURCES_SRCS} ${SHROME_SRCS})
   set_target_properties(${CEF_TARGET}  PROPERTIES
     CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
@@ -314,7 +314,7 @@ target_embed_metal_shader_libraries(${CEF_TARGET}
     file(WRITE ${_helper_info_plist} ${_plist_contents})
 
     # Create Helper executable target.
-    add_executable(${_helper_target} MACOSX_BUNDLE ${CEFSIMPLE_HELPER_SRCS})
+    add_executable(${_helper_target} MACOSX_BUNDLE ${SHROME_HELPER_SRCS})
     SET_EXECUTABLE_TARGET_PROPERTIES(${_helper_target})
     add_dependencies(${_helper_target} libcef_dll_wrapper)
     target_link_libraries(${_helper_target} libcef_dll_wrapper ${CEF_STANDARD_LIBS})
@@ -342,7 +342,7 @@ target_embed_metal_shader_libraries(${CEF_TARGET}
   # directive but that doesn't properly handle nested resource directories.
   # Remove these prefixes from input file paths.
   set(PREFIXES "mac/")
-  COPY_MAC_RESOURCES("${CEFSIMPLE_RESOURCES_SRCS}" "${PREFIXES}" "${CEF_TARGET}" "${CMAKE_CURRENT_SOURCE_DIR}" "${CEF_APP}")
+  COPY_MAC_RESOURCES("${SHROME_RESOURCES_SRCS}" "${PREFIXES}" "${CEF_TARGET}" "${CMAKE_CURRENT_SOURCE_DIR}" "${CEF_APP}")
 endif()
 
 
@@ -353,7 +353,7 @@ endif()
 if(OS_WINDOWS)
   if(USE_SANDBOX)
     # Shared library (DLL) target.
-    add_library(${CEF_TARGET} SHARED ${CEFSIMPLE_SRCS})
+    add_library(${CEF_TARGET} SHARED ${SHROME_SRCS})
     SET_LIBRARY_TARGET_PROPERTIES(${CEF_TARGET})
 
     # Copy and rename the bootstrap binary.
@@ -367,7 +367,7 @@ if(OS_WINDOWS)
     endif()
   else()
     # Executable target.
-    add_executable(${CEF_TARGET} WIN32 ${CEFSIMPLE_SRCS})
+    add_executable(${CEF_TARGET} WIN32 ${SHROME_SRCS})
     SET_EXECUTABLE_TARGET_PROPERTIES(${CEF_TARGET})
 
     # Add the custom manifest files to the executable.

@@ -41,6 +41,12 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+std::string get_macos_cache_dir(const std::string& app_name) {
+    const char* home = getenv("HOME");
+    if (!home) return "/tmp/" + app_name; // fallback
+    return std::string(home) + "/Library/Caches/" + app_name;
+}
+
 int main(int argc, char **argv)
 {
 
@@ -63,7 +69,7 @@ int main(int argc, char **argv)
     SDL_WindowFlags window_flags = SDL_WINDOW_METAL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
     int prevWinWidth = 1280 * main_scale;
     int prevWinHeight = 720 * main_scale;
-    SDL_Window *window = SDL_CreateWindow("Dear ImGui SDL3+SDL_GPU example", (int)(prevWinWidth), (int)(prevWinHeight), window_flags);
+    SDL_Window *window = SDL_CreateWindow("Shrome", (int)(prevWinWidth), (int)(prevWinHeight), window_flags);
     if (window == nullptr)
     {
         printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
@@ -126,7 +132,8 @@ int main(int argc, char **argv)
     CefSettings settings;
     // Required for windowless (offscreen) rendering. Must be set before CefInitialize. [3, 1]
     settings.windowless_rendering_enabled = true;
-
+    CefString(&settings.root_cache_path) = get_macos_cache_dir("shrome");
+    
 #if !defined(CEF_USE_SANDBOX)
     // Required if you're not using the sandbox. For simplicity in a minimal
     // example, disabling the sandbox is common.

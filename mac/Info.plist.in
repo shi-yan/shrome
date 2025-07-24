@@ -7,9 +7,9 @@
 	<key>CFBundleExecutable</key>
 	<string>${EXECUTABLE_NAME}</string>
 	<key>CFBundleIconFile</key>
-	<string>cefsimple.icns</string>
+	<string>shrome.icns</string>
 	<key>CFBundleIdentifier</key>
-	<string>org.cef.cefsimple</string>
+	<string>org.shi.shrome</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -34,6 +34,8 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+	<key>NSCameraUseContinuityCameraDeviceType</key>
 	<true/>
 </dict>
 </plist>
