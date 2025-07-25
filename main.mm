@@ -41,11 +41,17 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
 
-std::string get_macos_cache_dir(const std::string& app_name) {
-    const char* home = getenv("HOME");
-    if (!home) return "/tmp/" + app_name; // fallback
+#include "keycode_conversion.h"
+
+std::string get_macos_cache_dir(const std::string &app_name)
+{
+    const char *home = getenv("HOME");
+    if (!home)
+        return "/tmp/" + app_name; // fallback
     return std::string(home) + "/Library/Caches/" + app_name;
 }
+
+
 
 int main(int argc, char **argv)
 {
@@ -133,7 +139,7 @@ int main(int argc, char **argv)
     // Required for windowless (offscreen) rendering. Must be set before CefInitialize. [3, 1]
     settings.windowless_rendering_enabled = true;
     CefString(&settings.root_cache_path) = get_macos_cache_dir("shrome");
-    
+
 #if !defined(CEF_USE_SANDBOX)
     // Required if you're not using the sandbox. For simplicity in a minimal
     // example, disabling the sandbox is common.
@@ -179,6 +185,7 @@ int main(int argc, char **argv)
     bool isRightButtonDown = false;
     bool isMiddleButtonDown = false;
     // bool over_a_char = false;
+    SDL_StartTextInput(window);
     while (!done)
     {
         {
@@ -316,6 +323,10 @@ int main(int argc, char **argv)
                 { // For typed characters
                     if (!io.WantCaptureKeyboard)
                     {
+                        std::cout << "sdl =========== text input" << std::endl;
+
+                        std::cout << "SDL_TEXT_INPUT: " << event.text.text << std::endl;
+                        
                         // 1. Get the UTF-8 input text from SDL
                         const char *utf8_text = event.text.text;
 
@@ -347,34 +358,22 @@ int main(int argc, char **argv)
                 {
                     if (!io.WantCaptureKeyboard)
                     {
+                        std::cout << "sdl =========== key down" << std::endl;
+                        std::cout << "keycode " << event.key.key << std::endl;
+                        std::cout << "scancode " << event.key.scancode << std::endl;
+                        std::cout << "test " << std::endl;
+                        auto [keycode, scancode, character] = keycode_conversion(event.key);
+
                         CefKeyEvent key_event;
                         key_event.type = KEYEVENT_KEYDOWN;
                         // Map SDL_Scancode/SDL_Keycode to CEF virtual key codes
                         // This is the trickiest part and requires a mapping function
-                        key_event.windows_key_code = event.key.key;     // Not always direct
-                        key_event.native_key_code = event.key.scancode; // More reliable for raw key codes
-                        key_event.is_system_key = false;                // Usually false for regular keys
-                        key_event.character = 0;
-
-                        // Crucial: Set character for control keys
-                        switch (event.key.key)
-                        {
-                        case SDLK_BACKSPACE:
-                            key_event.character = '\b';
-                            break; // ASCII Backspace
-                        case SDLK_RETURN:
-                            key_event.character = '\r';
-                            break; // ASCII Carriage Return (often '\n' also works)
-                        case SDLK_DELETE:
-                            key_event.character = 0x7F;
-                            break; // ASCII DEL (sometimes 0x00, but 0x7F more common for Delete)
-                        case SDLK_TAB:
-                            key_event.character = '\t';
-                            break; // ASCII Tab
-                        default:
-                            key_event.character = 0;
-                            break; // For other RAWKEYDOWN, no character
-                        }
+                        key_event.windows_key_code = keycode; // Not always direct
+                        key_event.native_key_code = scancode; // More reliable for raw key codes
+                        key_event.is_system_key = false;       // alway false for mac
+                        key_event.character = character;
+                        key_event.unmodified_character = character;
+                        key_event.focus_on_editable_field = 0; // Not used in this context
 
                         // std::cout << "key down debug " << key_event.windows_key_code << std::endl;
 
@@ -402,35 +401,19 @@ int main(int argc, char **argv)
                 {
                     if (!io.WantCaptureKeyboard)
                     {
+                        std::cout << "sdl =========== key up" << std::endl;
+                        auto [keycode, scancode, character] = keycode_conversion(event.key);
+
                         CefKeyEvent key_event;
                         key_event.type = KEYEVENT_KEYUP;
                         // Map SDL_Scancode/SDL_Keycode to CEF virtual key codes
                         // This is the trickiest part and requires a mapping function
-                        key_event.windows_key_code = event.key.key;     // Not always direct
-                                                                        // std::cout << "key up debug " << key_event.windows_key_code << std::endl;
-                        key_event.native_key_code = event.key.scancode; // More reliable for raw key codes
+                        key_event.windows_key_code = keycode;     // Not always direct
+                        key_event.native_key_code = scancode; // More reliable for raw key codes
                         key_event.is_system_key = false;                // Usually false for regular keys
-                        key_event.character = 0;
-
-                        // Crucial: Set character for control keys
-                        switch (event.key.key)
-                        {
-                        case SDLK_BACKSPACE:
-                            key_event.character = '\b';
-                            break; // ASCII Backspace
-                        case SDLK_RETURN:
-                            key_event.character = '\r';
-                            break; // ASCII Carriage Return (often '\n' also works)
-                        case SDLK_DELETE:
-                            key_event.character = 0x7F;
-                            break; // ASCII DEL (sometimes 0x00, but 0x7F more common for Delete)
-                        case SDLK_TAB:
-                            key_event.character = '\t';
-                            break; // ASCII Tab
-                        default:
-                            key_event.character = 0;
-                            break; // For other RAWKEYDOWN, no character
-                        }
+                        key_event.character = character;
+                        key_event.unmodified_character = character;
+                        key_event.focus_on_editable_field = 0; // Not used in this context
 
                         // Set modifiers (Shift, Ctrl, Alt)
                         if (event.key.mod & SDL_KMOD_SHIFT)

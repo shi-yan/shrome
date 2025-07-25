@@ -18,6 +18,8 @@
 // #define STB_IMAGE_WRITE_IMPLEMENTATION
 // #include "stb_image_write.h"
 
+//--off-screen-rendering-enabled
+
 using RenderingCallback = std::function<void(CefRenderHandler::PaintElementType type,
                                              const CefRenderHandler::RectList &dirtyRects,
                                              const void *buffer,
@@ -163,7 +165,11 @@ public:
                   << ", VK=" << event.windows_key_code
                   << ", NK=" << event.native_key_code
                   << ", Char=" << event.character
-                  << ", Modifiers=" << event.modifiers << std::endl;
+                  << ", Modifiers=" << event.modifiers 
+                  << ", unmodified_char " << event.unmodified_character
+                  << ", is_system_key " << event.is_system_key
+                  << ", focus_on_editable_field " << event.focus_on_editable_field
+                  << std::endl;
         return false; // Don't block for now
     }
 
@@ -173,11 +179,15 @@ public:
     {
         // This is called AFTER the browser processes the key event.
         // Return true if you handled it and CEF should not do default processing.
-        std::cout << "OnKeyEvent: Type=" << event.type
+         std::cout << "OnKeyEvent: Type=" << event.type
                   << ", VK=" << event.windows_key_code
                   << ", NK=" << event.native_key_code
                   << ", Char=" << event.character
-                  << ", Modifiers=" << event.modifiers << std::endl;
+                  << ", Modifiers=" << event.modifiers 
+                  << ", unmodified_char " << event.unmodified_character
+                  << ", is_system_key " << event.is_system_key
+                  << ", focus_on_editable_field " << event.focus_on_editable_field
+                  << std::endl;
         return false; // Don't block for now
     }
 
@@ -239,8 +249,6 @@ public:
     {
         if (m_browser && m_browser->IsValid())
         {
-            m_browser->GetHost()->SetFocus(true);
-            std::cout << "send key event " << event.windows_key_code << std::endl;
             m_browser->GetHost()->SendKeyEvent(event);
         }
     }
@@ -489,7 +497,7 @@ public:
 
         // Create the offscreen browser
         // You might want to load a specific URL here instead of "about:blank"
-        CefBrowserHost::CreateBrowser(window_info, m_client, "https://www.youtube.com/watch?v=AuaABDWFs_8", browser_settings, nullptr, nullptr); // [1]
+        CefBrowserHost::CreateBrowser(window_info, m_client, "https://google.com", browser_settings, nullptr, nullptr); // [1]
     }
 
     void close(bool force_close)

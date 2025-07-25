@@ -90,6 +90,7 @@ set(SHROME_SRCS_MAC
   ${imgui_SOURCE_DIR}/imgui_tables.cpp 
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
+  keycode_conversion.cpp
   main.mm
   mycef.cpp
   )
