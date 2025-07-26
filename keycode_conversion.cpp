@@ -1,6 +1,7 @@
 #include "keycode_conversion.h"
 #include "mac_keycode.h"
 #include "win_keycode.h"
+#include <iostream>
 
 std::tuple<int, int, char16_t> keycode_conversion(const SDL_KeyboardEvent &keyboard_event)
 {
@@ -11,7 +12,105 @@ std::tuple<int, int, char16_t> keycode_conversion(const SDL_KeyboardEvent &keybo
     switch (key_code)
     {
     case SDLK_A:
-        return {VK_A, 0, 'a'};
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'a'};
+    case SDLK_S:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 's'};
+    case SDLK_D:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'd'};
+    case SDLK_F:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'f'};
+    case SDLK_H:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'h'};
+    case SDLK_G:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'g'};
+    case SDLK_Z:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'z'};
+    case SDLK_X:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'x'};
+    case SDLK_C:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'c'};
+    case SDLK_V:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'v'};
+    case SDLK_B:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'b'};
+    case SDLK_Q:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'q'};
+    case SDLK_W:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'w'};
+    case SDLK_E:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'e'};
+    case SDLK_R:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'r'};
+    case SDLK_Y:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'y'};
+    case SDLK_T:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 't'};
+    case SDLK_1:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '1'};
+    case SDLK_2:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '2'};
+    case SDLK_3:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '3'};
+    case SDLK_4:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '4'};
+    case SDLK_6:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '6'};
+    case SDLK_5:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '5'};
+    case SDLK_EQUALS:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '='};
+    case SDLK_9:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '9'};
+    case SDLK_7:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '7'};
+    case SDLK_MINUS:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '-'};
+    case SDLK_8:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '8'};
+    case SDLK_0:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '0'};
+    case SDLK_RIGHTBRACKET:
+        return {0, sdl_keycode_2_mac_keycode(key_code), ']'};
+    case SDLK_O:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'o'};
+    case SDLK_U:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'u'};
+    case SDLK_LEFTBRACKET:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '['};
+    case SDLK_I:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'i'};
+    case SDLK_P:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'p'};
+    case SDLK_L:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'l'};
+    case SDLK_J:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'j'};
+    case SDLK_APOSTROPHE:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '\''};
+    case SDLK_K:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'k'};
+    case SDLK_SEMICOLON:
+        return {0, sdl_keycode_2_mac_keycode(key_code), ';'};
+    case SDLK_BACKSLASH:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '\\'};
+    case SDLK_COMMA:
+        return {0, sdl_keycode_2_mac_keycode(key_code), ','};
+    case SDLK_SLASH:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '/'};
+    case SDLK_N:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'n'};
+    case SDLK_M:
+        return {0, sdl_keycode_2_mac_keycode(key_code), 'm'};
+    case SDLK_PERIOD:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '.'};
+    case SDLK_GRAVE:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '`'};
+    case SDLK_KP_PERIOD:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '.'};
+    case SDLK_KP_MULTIPLY:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '*'};
+    case SDLK_KP_PLUS:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '+'};
     default:
         return {key_code, scan_code, character};
     }
@@ -228,8 +327,8 @@ uint16_t sdl_keycode_2_mac_keycode(int sdl_keycode)
         return kVK_Home;
     case SDLK_PAGEUP:
         return kVK_PageUp;
-   /* case SDLK_ForwardDelete:
-        return kVK_ForwardDelete;*/
+        /* case SDLK_ForwardDelete:
+             return kVK_ForwardDelete;*/
     case SDLK_F4:
         return kVK_F4;
     case SDLK_END:
@@ -253,4 +352,31 @@ uint16_t sdl_keycode_2_mac_keycode(int sdl_keycode)
         break;
     }
     return 0;
+}
+
+void debug_print_cef_key_event(const CefKeyEvent &key_event)
+{
+    switch(key_event.type)
+    {
+        case KEYEVENT_RAWKEYDOWN:
+            std::cout << "CEF_KeyEvent: RAWKEYDOWN =====" << std::endl;
+            break;
+        case KEYEVENT_KEYDOWN:
+            std::cout << "CEF_KeyEvent: KEYDOWN =====" << std::endl;
+            break;
+        case KEYEVENT_KEYUP:
+            std::cout << "CEF_KeyEvent: KEYUP =====" << std::endl;
+            break;
+        case KEYEVENT_CHAR:
+            std::cout << "CEF_KeyEvent: CHAR =====" << std::endl;
+            break;
+    }
+    std::cout << "virtual keycode: (0x" << std::hex << key_event.windows_key_code << std::dec << ")" << std::endl
+              << "native_key_code: " << key_event.native_key_code << std::endl
+              << "character: " << key_event.character<< std::endl
+              << "unmodified_character: " << key_event.unmodified_character << std::endl
+              << "modifiers: " << key_event.modifiers << std::endl
+              << "is_system_key: " << key_event.is_system_key << std::endl
+              << "focus_on_editable_field: " << key_event.focus_on_editable_field << std::endl;
+    std::cout << "========================" << std::endl;
 }

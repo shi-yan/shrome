@@ -51,8 +51,6 @@ std::string get_macos_cache_dir(const std::string &app_name)
     return std::string(home) + "/Library/Caches/" + app_name;
 }
 
-
-
 int main(int argc, char **argv)
 {
 
@@ -204,6 +202,7 @@ int main(int argc, char **argv)
             ImGui::SetMouseCursor(app->get_cursor_type());
 
             SDL_Event event;
+            int cached_scancode = 0;
             while (SDL_PollEvent(&event))
             {
                 ImGui_ImplSDL3_ProcessEvent(&event);
@@ -324,9 +323,6 @@ int main(int argc, char **argv)
                     if (!io.WantCaptureKeyboard)
                     {
                         std::cout << "sdl =========== text input" << std::endl;
-
-                        std::cout << "SDL_TEXT_INPUT: " << event.text.text << std::endl;
-                        
                         // 1. Get the UTF-8 input text from SDL
                         const char *utf8_text = event.text.text;
 
@@ -346,8 +342,12 @@ int main(int argc, char **argv)
                                 CefKeyEvent key_event;
                                 key_event.type = KEYEVENT_CHAR;
                                 key_event.character = utf16_data[i]; // Access individual char16 code unit
+                                key_event.unmodified_character = utf16_data[i]; // Same for unmodified character
                                 key_event.windows_key_code = 0;      // Not a raw key event
-                                key_event.native_key_code = 0;
+                                key_event.native_key_code = cached_scancode;
+
+                                debug_print_cef_key_event(key_event);
+
                                 app->inject_key_event(key_event);
                             }
                         }
@@ -359,23 +359,19 @@ int main(int argc, char **argv)
                     if (!io.WantCaptureKeyboard)
                     {
                         std::cout << "sdl =========== key down" << std::endl;
-                        std::cout << "keycode " << event.key.key << std::endl;
-                        std::cout << "scancode " << event.key.scancode << std::endl;
-                        std::cout << "test " << std::endl;
-                        auto [keycode, scancode, character] = keycode_conversion(event.key);
 
+                        auto [keycode, scancode, character] = keycode_conversion(event.key);
+                        cached_scancode = scancode;
                         CefKeyEvent key_event;
                         key_event.type = KEYEVENT_KEYDOWN;
                         // Map SDL_Scancode/SDL_Keycode to CEF virtual key codes
                         // This is the trickiest part and requires a mapping function
                         key_event.windows_key_code = keycode; // Not always direct
                         key_event.native_key_code = scancode; // More reliable for raw key codes
-                        key_event.is_system_key = false;       // alway false for mac
+                        key_event.is_system_key = false;      // alway false for mac
                         key_event.character = character;
                         key_event.unmodified_character = character;
                         key_event.focus_on_editable_field = 0; // Not used in this context
-
-                        // std::cout << "key down debug " << key_event.windows_key_code << std::endl;
 
                         // Set modifiers (Shift, Ctrl, Alt)
                         if (event.key.mod & SDL_KMOD_SHIFT)
@@ -387,13 +383,8 @@ int main(int argc, char **argv)
                         if (event.key.mod & SDL_KMOD_GUI) // KMOD_GUI for Cmd key on Mac
                             key_event.modifiers |= EVENTFLAG_COMMAND_DOWN;
 
-                        std::cout << "SDL_KEYDOWN: SDL_Keycode=" << event.key.key
-                                  << " (0x" << std::hex << event.key.key << std::dec << ")"
-                                  << ", SDL_Scancode=" << event.key.scancode
-                                  << " -> CEF_KeyEvent: windows_key_code=" << key_event.windows_key_code
-                                  << " (0x" << std::hex << key_event.windows_key_code << std::dec << ")"
-                                  << ", type=RAWKEYDOWN"
-                                  << ", modifiers=" << key_event.modifiers << std::endl;
+                        debug_print_cef_key_event(key_event);
+
                         app->inject_key_event(key_event);
                     }
                 }
@@ -408,9 +399,9 @@ int main(int argc, char **argv)
                         key_event.type = KEYEVENT_KEYUP;
                         // Map SDL_Scancode/SDL_Keycode to CEF virtual key codes
                         // This is the trickiest part and requires a mapping function
-                        key_event.windows_key_code = keycode;     // Not always direct
+                        key_event.windows_key_code = keycode; // Not always direct
                         key_event.native_key_code = scancode; // More reliable for raw key codes
-                        key_event.is_system_key = false;                // Usually false for regular keys
+                        key_event.is_system_key = false;      // Usually false for regular keys
                         key_event.character = character;
                         key_event.unmodified_character = character;
                         key_event.focus_on_editable_field = 0; // Not used in this context
@@ -425,14 +416,7 @@ int main(int argc, char **argv)
                         if (event.key.mod & SDL_KMOD_GUI)
                             key_event.modifiers |= EVENTFLAG_COMMAND_DOWN;
 
-                        std::cout << "SDL_KEYUP: SDL_Keycode=" << event.key.key
-                                  << " (0x" << std::hex << event.key.key << std::dec << ")"
-                                  << ", SDL_Scancode=" << event.key.scancode
-                                  << " -> CEF_KeyEvent: windows_key_code=" << key_event.windows_key_code
-                                  << " (0x" << std::hex << key_event.windows_key_code << std::dec << ")"
-                                  << ", type=KEYUP"
-                                  << ", modifiers=" << key_event.modifiers << std::endl;
-
+                        debug_print_cef_key_event(key_event);
                         app->inject_key_event(key_event);
                     }
                 }

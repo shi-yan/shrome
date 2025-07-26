@@ -239,7 +239,6 @@ public:
         {
             if (m_browser->GetHost()->IsWindowRenderingDisabled())
             {
-                // std::cout << "request new frame" << std::endl;
                 m_browser->GetHost()->SendExternalBeginFrame();
             }
         }
@@ -249,6 +248,7 @@ public:
     {
         if (m_browser && m_browser->IsValid())
         {
+            std::cout << "inject key event: " << event.type << std::endl;
             m_browser->GetHost()->SendKeyEvent(event);
         }
     }
