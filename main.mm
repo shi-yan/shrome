@@ -183,7 +183,7 @@ int main(int argc, char **argv)
     bool isRightButtonDown = false;
     bool isMiddleButtonDown = false;
     // bool over_a_char = false;
-    SDL_StartTextInput(window);
+    bool has_focus = false;
     while (!done)
     {
         {
@@ -200,6 +200,14 @@ int main(int argc, char **argv)
             }
 
             ImGui::SetMouseCursor(app->get_cursor_type());
+
+            if (app->has_focus() && has_focus == false){
+                has_focus = true;
+                SDL_StartTextInput(window);
+            } else if (!app->has_focus() && has_focus == true) {
+                has_focus = false;
+                SDL_StopTextInput(window);
+            }
 
             SDL_Event event;
             int cached_scancode = 0;
@@ -341,9 +349,9 @@ int main(int argc, char **argv)
                             {
                                 CefKeyEvent key_event;
                                 key_event.type = KEYEVENT_CHAR;
-                                key_event.character = utf16_data[i]; // Access individual char16 code unit
+                                key_event.character = utf16_data[i];            // Access individual char16 code unit
                                 key_event.unmodified_character = utf16_data[i]; // Same for unmodified character
-                                key_event.windows_key_code = 0;      // Not a raw key event
+                                key_event.windows_key_code = 0;                 // Not a raw key event
                                 key_event.native_key_code = cached_scancode;
 
                                 debug_print_cef_key_event(key_event);

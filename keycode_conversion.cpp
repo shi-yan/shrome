@@ -8,7 +8,7 @@ std::tuple<int, int, char16_t> keycode_conversion(const SDL_KeyboardEvent &keybo
     int key_code = keyboard_event.key;
     int scan_code = keyboard_event.scancode;
     char16_t character = 0;
-
+    std::cout << "debug keycode 0x" << std::hex << key_code << std::endl;
     switch (key_code)
     {
     case SDLK_A:
@@ -111,6 +111,11 @@ std::tuple<int, int, char16_t> keycode_conversion(const SDL_KeyboardEvent &keybo
         return {0, sdl_keycode_2_mac_keycode(key_code), '*'};
     case SDLK_KP_PLUS:
         return {0, sdl_keycode_2_mac_keycode(key_code), '+'};
+    case SDLK_RETURN:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '\n'};
+    case SDLK_BACKSPACE:
+        return {0, sdl_keycode_2_mac_keycode(key_code), '\b'};
+
     default:
         return {key_code, scan_code, character};
     }
@@ -259,6 +264,8 @@ uint16_t sdl_keycode_2_mac_keycode(int sdl_keycode)
         return kVK_Space;
     case SDLK_DELETE:
         return kVK_Delete;
+    case SDLK_BACKSPACE:
+        return kVK_Delete; // Backspace is mapped to Delete on macOS
     case SDLK_ESCAPE:
         return kVK_Escape;
     case SDLK_LGUI:
@@ -356,24 +363,24 @@ uint16_t sdl_keycode_2_mac_keycode(int sdl_keycode)
 
 void debug_print_cef_key_event(const CefKeyEvent &key_event)
 {
-    switch(key_event.type)
+    switch (key_event.type)
     {
-        case KEYEVENT_RAWKEYDOWN:
-            std::cout << "CEF_KeyEvent: RAWKEYDOWN =====" << std::endl;
-            break;
-        case KEYEVENT_KEYDOWN:
-            std::cout << "CEF_KeyEvent: KEYDOWN =====" << std::endl;
-            break;
-        case KEYEVENT_KEYUP:
-            std::cout << "CEF_KeyEvent: KEYUP =====" << std::endl;
-            break;
-        case KEYEVENT_CHAR:
-            std::cout << "CEF_KeyEvent: CHAR =====" << std::endl;
-            break;
+    case KEYEVENT_RAWKEYDOWN:
+        std::cout << "CEF_KeyEvent: RAWKEYDOWN =====" << std::endl;
+        break;
+    case KEYEVENT_KEYDOWN:
+        std::cout << "CEF_KeyEvent: KEYDOWN =====" << std::endl;
+        break;
+    case KEYEVENT_KEYUP:
+        std::cout << "CEF_KeyEvent: KEYUP =====" << std::endl;
+        break;
+    case KEYEVENT_CHAR:
+        std::cout << "CEF_KeyEvent: CHAR =====" << std::endl;
+        break;
     }
     std::cout << "virtual keycode: (0x" << std::hex << key_event.windows_key_code << std::dec << ")" << std::endl
               << "native_key_code: " << key_event.native_key_code << std::endl
-              << "character: " << key_event.character<< std::endl
+              << "character: " << key_event.character << std::endl
               << "unmodified_character: " << key_event.unmodified_character << std::endl
               << "modifiers: " << key_event.modifiers << std::endl
               << "is_system_key: " << key_event.is_system_key << std::endl

@@ -9,6 +9,7 @@
 #include "include/cef_render_handler.h"
 #include "include/wrapper/cef_helpers.h"
 #include "include/wrapper/cef_library_loader.h"
+#include "include/cef_focus_handler.h"
 #include "include/cef_command_line.h" // Required for CefCommandLine
 
 #include <iostream>
@@ -126,11 +127,13 @@ class MyClient : public CefClient,
                  public CefLifeSpanHandler,
                  public CefDisplayHandler,
                  public CefContextMenuHandler,
-                 public CefKeyboardHandler // <--- Add this
+                 public CefKeyboardHandler,
+                    public CefFocusHandler
 {
 public:
     ImGuiMouseCursor m_imgui_cursor_type = ImGuiMouseCursor_Arrow;
     bool m_closed = false;
+    bool m_has_focus = false;
 
     // ... existing members ...
     CefRefPtr<CefBrowser> m_browser; // Your browser instance
@@ -154,6 +157,19 @@ public:
         return this; // Return a reference to yourself
     }
 
+    CefRefPtr<CefFocusHandler> GetFocusHandler() override
+    {
+        return this; // Return a reference to yourself
+    }
+
+    void OnGotFocus(CefRefPtr<CefBrowser> browser) override {
+        m_has_focus = true;
+    }
+
+    void OnTakeFocus(CefRefPtr<CefBrowser> browser, bool next) override {
+        m_has_focus = false;
+    }
+
     bool OnPreKeyEvent(CefRefPtr<CefBrowser> browser,
                        const CefKeyEvent &event,
                        CefEventHandle os_event,
@@ -170,6 +186,7 @@ public:
                   << ", is_system_key " << event.is_system_key
                   << ", focus_on_editable_field " << event.focus_on_editable_field
                   << std::endl;
+        *is_keyboard_shortcut = false;
         return false; // Don't block for now
     }
 
@@ -188,7 +205,8 @@ public:
                   << ", is_system_key " << event.is_system_key
                   << ", focus_on_editable_field " << event.focus_on_editable_field
                   << std::endl;
-        return false; // Don't block for now
+        // I have to return true here, cef will send an NSEvent when this is false, that event triggers menu shortcuts.
+        return true;
     }
 
     // CefContextMenuHandler methods:
@@ -497,7 +515,7 @@ public:
 
         // Create the offscreen browser
         // You might want to load a specific URL here instead of "about:blank"
-        CefBrowserHost::CreateBrowser(window_info, m_client, "https://google.com", browser_settings, nullptr, nullptr); // [1]
+        CefBrowserHost::CreateBrowser(window_info, m_client, "https://prosemirror.net", browser_settings, nullptr, nullptr); // [1]
     }
 
     void close(bool force_close)
@@ -506,6 +524,14 @@ public:
         {
             m_client->close_browser(force_close);
         }
+    }
+
+    bool has_focus() {
+        if (m_client)
+        {
+            return m_client->m_has_focus;
+        }
+        return false;
     }
 
     bool is_browser_closed()

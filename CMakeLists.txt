@@ -11,6 +11,8 @@ project(test_cef)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set(CEF_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/cef_binary_138.0.26+g84f2d27+chromium-138.0.7204.158_macosarm64")
+#set(CEF_ROOT "/Users/shiy/code/chromium_git/chromium/src/cef/binary_distrib/cef_binary_139.0.0-master.3247+g0638405+chromium-139.0.7258.0_macosarm64")
+
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake;${CMAKE_SOURCE_DIR}/cmake")
 message(STATUS "--- Before CEF: CMAKE_CXX_FLAGS = ${CMAKE_CXX_FLAGS}")
 
@@ -252,9 +254,14 @@ string(REPLACE "-Werror" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
   target_include_directories(${CEF_TARGET} PRIVATE ${stb_SOURCE_DIR}
   ${imgui_SOURCE_DIR}  
   ${imgui_SOURCE_DIR}/backends
-  ${metal-cpp_SOURCE_DIR})
+  ${metal-cpp_SOURCE_DIR}
+  #"/Users/shiy/work/SDL/include"
+  )
 
   add_dependencies(${CEF_TARGET} libcef_dll_wrapper)
+
+  target_link_directories(${CEF_TARGET} PRIVATE "/Users/shiy/work/SDL/build")
+
   target_link_libraries(${CEF_TARGET} libcef_dll_wrapper ${CEF_STANDARD_LIBS} SDL3::SDL3
   glm::glm 
   "-framework Metal"
