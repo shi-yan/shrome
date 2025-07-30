@@ -201,10 +201,13 @@ int main(int argc, char **argv)
 
             ImGui::SetMouseCursor(app->get_cursor_type());
 
-            if (app->has_focus() && has_focus == false){
+            if (app->has_focus() && has_focus == false)
+            {
                 has_focus = true;
                 SDL_StartTextInput(window);
-            } else if (!app->has_focus() && has_focus == true) {
+            }
+            else if (!app->has_focus() && has_focus == true)
+            {
                 has_focus = false;
                 SDL_StopTextInput(window);
             }
@@ -367,33 +370,61 @@ int main(int argc, char **argv)
                     if (!io.WantCaptureKeyboard)
                     {
                         std::cout << "sdl =========== key down" << std::endl;
+                        if (!is_modifier_key(event.key))
+                        {
+                            auto [keycode, scancode, character] = keycode_conversion(event.key);
+                            cached_scancode = scancode;
+                            CefKeyEvent key_event;
+                            key_event.type = KEYEVENT_KEYDOWN;
+                            // Map SDL_Scancode/SDL_Keycode to CEF virtual key codes
+                            // This is the trickiest part and requires a mapping function
+                            key_event.windows_key_code = keycode; // Not always direct
+                            key_event.native_key_code = scancode; // More reliable for raw key codes
+                            key_event.is_system_key = false;      // alway false for mac
+                            key_event.character = character;
+                            key_event.unmodified_character = character;
+                            key_event.focus_on_editable_field = 0; // Not used in this context
 
-                        auto [keycode, scancode, character] = keycode_conversion(event.key);
-                        cached_scancode = scancode;
-                        CefKeyEvent key_event;
-                        key_event.type = KEYEVENT_KEYDOWN;
-                        // Map SDL_Scancode/SDL_Keycode to CEF virtual key codes
-                        // This is the trickiest part and requires a mapping function
-                        key_event.windows_key_code = keycode; // Not always direct
-                        key_event.native_key_code = scancode; // More reliable for raw key codes
-                        key_event.is_system_key = false;      // alway false for mac
-                        key_event.character = character;
-                        key_event.unmodified_character = character;
-                        key_event.focus_on_editable_field = 0; // Not used in this context
+                            // Set modifiers (Shift, Ctrl, Alt)
+                            if (event.key.mod & SDL_KMOD_SHIFT)
+                                key_event.modifiers |= EVENTFLAG_SHIFT_DOWN;
+                            if (event.key.mod & SDL_KMOD_CTRL)
+                                key_event.modifiers |= EVENTFLAG_CONTROL_DOWN;
+                            if (event.key.mod & SDL_KMOD_ALT)
+                                key_event.modifiers |= EVENTFLAG_ALT_DOWN;
+                            if (event.key.mod & SDL_KMOD_GUI) // KMOD_GUI for Cmd key on Mac
+                                key_event.modifiers |= EVENTFLAG_COMMAND_DOWN;
 
-                        // Set modifiers (Shift, Ctrl, Alt)
-                        if (event.key.mod & SDL_KMOD_SHIFT)
-                            key_event.modifiers |= EVENTFLAG_SHIFT_DOWN;
-                        if (event.key.mod & SDL_KMOD_CTRL)
-                            key_event.modifiers |= EVENTFLAG_CONTROL_DOWN;
-                        if (event.key.mod & SDL_KMOD_ALT)
-                            key_event.modifiers |= EVENTFLAG_ALT_DOWN;
-                        if (event.key.mod & SDL_KMOD_GUI) // KMOD_GUI for Cmd key on Mac
-                            key_event.modifiers |= EVENTFLAG_COMMAND_DOWN;
+                            debug_print_cef_key_event(key_event);
 
-                        debug_print_cef_key_event(key_event);
+                            app->inject_key_event(key_event);
 
-                        app->inject_key_event(key_event);
+                            /*if (should_inject_text_input(event.key))
+                            {
+                                CefKeyEvent key_event;
+                                key_event.type = KEYEVENT_CHAR;
+                                // Map SDL_Scancode/SDL_Keycode to CEF virtual key codes
+                                // This is the trickiest part and requires a mapping function
+                                key_event.windows_key_code = keycode; // Not always direct
+                                key_event.native_key_code = scancode; // More reliable for raw key codes
+                                key_event.is_system_key = false;      // alway false for mac
+                                key_event.character = character;
+                                key_event.unmodified_character = character;
+                                key_event.focus_on_editable_field = 0; // Not used in this context
+                                                                       // Set modifiers (Shift, Ctrl, Alt)
+                                if (event.key.mod & SDL_KMOD_SHIFT)
+                                    key_event.modifiers |= EVENTFLAG_SHIFT_DOWN;
+                                if (event.key.mod & SDL_KMOD_CTRL)
+                                    key_event.modifiers |= EVENTFLAG_CONTROL_DOWN;
+                                if (event.key.mod & SDL_KMOD_ALT)
+                                    key_event.modifiers |= EVENTFLAG_ALT_DOWN;
+                                if (event.key.mod & SDL_KMOD_GUI) // KMOD_GUI for Cmd key on Mac
+                                    key_event.modifiers |= EVENTFLAG_COMMAND_DOWN;
+                                debug_print_cef_key_event(key_event);
+
+                                app->inject_key_event(key_event);
+                            }*/
+                        }
                     }
                 }
                 else if (event.type == SDL_EVENT_KEY_UP)
@@ -401,31 +432,38 @@ int main(int argc, char **argv)
                     if (!io.WantCaptureKeyboard)
                     {
                         std::cout << "sdl =========== key up" << std::endl;
-                        auto [keycode, scancode, character] = keycode_conversion(event.key);
 
-                        CefKeyEvent key_event;
-                        key_event.type = KEYEVENT_KEYUP;
-                        // Map SDL_Scancode/SDL_Keycode to CEF virtual key codes
-                        // This is the trickiest part and requires a mapping function
-                        key_event.windows_key_code = keycode; // Not always direct
-                        key_event.native_key_code = scancode; // More reliable for raw key codes
-                        key_event.is_system_key = false;      // Usually false for regular keys
-                        key_event.character = character;
-                        key_event.unmodified_character = character;
-                        key_event.focus_on_editable_field = 0; // Not used in this context
+                        if (!should_skip_key_up(event.key))
+                        {
+                            // it seems that when we press the arrow keys, CEF overwrites the event type for
+                            // both KEYUP and KEYDOWN to RAWKEYDOWN, 
+                            // in the end, we trigger arrow key twice. I hence skip the KEYUP event
+                            auto [keycode, scancode, character] = keycode_conversion(event.key);
 
-                        // Set modifiers (Shift, Ctrl, Alt)
-                        if (event.key.mod & SDL_KMOD_SHIFT)
-                            key_event.modifiers |= EVENTFLAG_SHIFT_DOWN;
-                        if (event.key.mod & SDL_KMOD_CTRL)
-                            key_event.modifiers |= EVENTFLAG_CONTROL_DOWN;
-                        if (event.key.mod & SDL_KMOD_ALT)
-                            key_event.modifiers |= EVENTFLAG_ALT_DOWN;
-                        if (event.key.mod & SDL_KMOD_GUI)
-                            key_event.modifiers |= EVENTFLAG_COMMAND_DOWN;
+                            CefKeyEvent key_event;
+                            key_event.type = KEYEVENT_KEYUP;
+                            // Map SDL_Scancode/SDL_Keycode to CEF virtual key codes
+                            // This is the trickiest part and requires a mapping function
+                            key_event.windows_key_code = keycode; // Not always direct
+                            key_event.native_key_code = scancode; // More reliable for raw key codes
+                            key_event.is_system_key = false;      // Usually false for regular keys
+                            key_event.character = character;
+                            key_event.unmodified_character = character;
+                            key_event.focus_on_editable_field = 0; // Not used in this context
 
-                        debug_print_cef_key_event(key_event);
-                        app->inject_key_event(key_event);
+                            // Set modifiers (Shift, Ctrl, Alt)
+                            if (event.key.mod & SDL_KMOD_SHIFT)
+                                key_event.modifiers |= EVENTFLAG_SHIFT_DOWN;
+                            if (event.key.mod & SDL_KMOD_CTRL)
+                                key_event.modifiers |= EVENTFLAG_CONTROL_DOWN;
+                            if (event.key.mod & SDL_KMOD_ALT)
+                                key_event.modifiers |= EVENTFLAG_ALT_DOWN;
+                            if (event.key.mod & SDL_KMOD_GUI)
+                                key_event.modifiers |= EVENTFLAG_COMMAND_DOWN;
+
+                            debug_print_cef_key_event(key_event);
+                            app->inject_key_event(key_event);
+                        }
                     }
                 }
             }
