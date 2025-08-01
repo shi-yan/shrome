@@ -10,6 +10,12 @@ project(test_cef)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
+find_library(COCOA_FRAMEWORK Cocoa)
+find_library(FOUNDATION_FRAMEWORK Foundation)
+find_library(METAL_FRAMEWORK Metal)
+find_library(METALKIT_FRAMEWORK MetalKit)
+find_library(GAMECONTROLLER_FRAMEWORK GameController)
+
 set(CEF_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/cef_binary_138.0.26+g84f2d27+chromium-138.0.7204.158_macosarm64")
 #set(CEF_ROOT "/Users/shiy/code/chromium_git/chromium/src/cef/binary_distrib/cef_binary_139.0.0-master.3247+g0638405+chromium-139.0.7258.0_macosarm64")
 
@@ -66,8 +72,6 @@ macro(print_all_variables)
     message(STATUS "print_all_variables------------------------------------------}")
 endmacro()
 
-find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3)
-
 print_all_variables()
 # SHROME sources.
 set(SHROME_SRCS
@@ -81,20 +85,19 @@ set(SHROME_SRCS_LINUX
   simple_handler_linux.cc
   )
 set(SHROME_SRCS_MAC
-  #cefsimple_mac.mm
-  #cefsimple_offscreen.cc
-  simple_handler_mac.mm
   ${imgui_SOURCE_DIR}/backends/imgui_impl_metal.mm 
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp 
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_osx.mm
   ${imgui_SOURCE_DIR}/imgui.cpp 
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp 
   ${imgui_SOURCE_DIR}/imgui_draw.cpp 
   ${imgui_SOURCE_DIR}/imgui_tables.cpp 
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
-  keycode_conversion.cpp
-  main.mm
-  mycef.cpp
+ # keycode_conversion.cpp
+ simple_handler_mac.mm
+  main2.mm
+  metal_view.mm
+  #mycef.cpp
   )
 set(SHROME_SRCS_WINDOWS
   cefsimple_win.cc
@@ -170,7 +173,7 @@ if(OS_LINUX)
   add_executable(${CEF_TARGET} ${SHROME_SRCS})
   SET_EXECUTABLE_TARGET_PROPERTIES(${CEF_TARGET})
   add_dependencies(${CEF_TARGET} libcef_dll_wrapper)
-  target_link_libraries(${CEF_TARGET} libcef_lib libcef_dll_wrapper ${CEF_STANDARD_LIBS}  SDL3::SDL3)
+  target_link_libraries(${CEF_TARGET} libcef_lib libcef_dll_wrapper ${CEF_STANDARD_LIBS})
 
   # Set rpath so that libraries can be placed next to the executable.
   set_target_properties(${CEF_TARGET} PROPERTIES INSTALL_RPATH "$ORIGIN")
@@ -255,20 +258,14 @@ string(REPLACE "-Werror" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
   ${imgui_SOURCE_DIR}  
   ${imgui_SOURCE_DIR}/backends
   ${metal-cpp_SOURCE_DIR}
-  #"/Users/shiy/work/SDL/include"
   )
 
   add_dependencies(${CEF_TARGET} libcef_dll_wrapper)
 
-  target_link_directories(${CEF_TARGET} PRIVATE "/Users/shiy/work/SDL/build")
-
-  target_link_libraries(${CEF_TARGET} libcef_dll_wrapper ${CEF_STANDARD_LIBS} SDL3::SDL3
+  target_link_libraries(${CEF_TARGET} libcef_dll_wrapper ${CEF_STANDARD_LIBS}
   glm::glm 
-  "-framework Metal"
-  "-framework MetalKit"
-  "-framework AppKit"
-  "-framework Foundation"
-  "-framework QuartzCore"
+  ${COCOA_FRAMEWORK} ${FOUNDATION_FRAMEWORK} ${METAL_FRAMEWORK} ${METALKIT_FRAMEWORK}
+  ${GAMECONTROLLER_FRAMEWORK}
   )
   set_target_properties(${CEF_TARGET} PROPERTIES
     MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in
