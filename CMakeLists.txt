@@ -49,7 +49,7 @@ FetchContent_Populate(
 
 FetchContent_Populate(
     metal-cpp
-    URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS15_iOS18.zip
+    URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS15.2_iOS18.2.zip
 )
 
 FetchContent_Declare(
@@ -94,10 +94,10 @@ set(SHROME_SRCS_MAC
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
  # keycode_conversion.cpp
- simple_handler_mac.mm
+ #simple_handler_mac.mm
   main2.mm
   metal_view.mm
-  #mycef.cpp
+  mycef.cpp
   )
 set(SHROME_SRCS_WINDOWS
   cefsimple_win.cc

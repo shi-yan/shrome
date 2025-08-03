@@ -1,9 +1,7 @@
 #ifndef MYCEF_H
 #define MYCEF_H
-#include <Foundation/Foundation.hpp>
-#include <Metal/Metal.hpp>
-#include <QuartzCore/QuartzCore.hpp>
-#include <simd/simd.h>
+
+
 #include "include/cef_app.h"
 #include "include/cef_client.h"
 #include "include/cef_render_handler.h"
@@ -20,6 +18,17 @@
 // #include "stb_image_write.h"
 
 //--off-screen-rendering-enabled
+
+namespace MTL {
+    class Device;
+    class Texture;
+    class Buffer;
+    class DepthStencilState;
+    class RenderPipelineState;
+    class RenderCommandEncoder;
+};
+
+std::string get_macos_cache_dir(const std::string &app_name);
 
 using RenderingCallback = std::function<void(CefRenderHandler::PaintElementType type,
                                              const CefRenderHandler::RectList &dirtyRects,
@@ -485,7 +494,7 @@ public:
 
     MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height, uint32_t pixel_density);
 
-    void init(MTL::Device *metal_device, MTL::PixelFormat pixel_format, uint32_t window_width, uint32_t window_height);
+    void init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t window_width, uint32_t window_height);
 
     ~MyApp();
 

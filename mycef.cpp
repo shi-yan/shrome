@@ -1,4 +1,12 @@
+#define NS_PRIVATE_IMPLEMENTATION
+#define CA_PRIVATE_IMPLEMENTATION
+#define MTL_PRIVATE_IMPLEMENTATION
+#include <Foundation/Foundation.hpp>
+#include <Metal/Metal.hpp>
+#include <QuartzCore/QuartzCore.hpp>
+#include <simd/simd.h>
 #include "mycef.h"
+
 #include <iostream>
 
 MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height,uint32_t pixel_density)
@@ -189,6 +197,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
 void MyApp::OnBeforeCommandLineProcessing(const CefString &process_type,
                                           CefRefPtr<CefCommandLine> command_line)
 {
+    std::cout << "OnBeforeCommandLineProcessing called for process type: " << process_type.ToString() << std::endl;
     // Check if it's the browser process (process_type will be empty for browser process)
     if (process_type.empty())
     {
@@ -261,7 +270,7 @@ MyRenderHandler::MyRenderHandler(int width, int height, int pixel_density, Rende
 {
 }
 
-void MyApp::init(MTL::Device *metal_device, MTL::PixelFormat pixel_format, uint32_t window_width, uint32_t window_height)
+void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t window_width, uint32_t window_height)
 {
     simd::float2 offset = {0.0, 0.0};
     m_zero_offset_buffer = m_metal_device->newBuffer(sizeof(simd::float2), MTL::ResourceStorageModeShared);
@@ -339,7 +348,7 @@ void MyApp::init(MTL::Device *metal_device, MTL::PixelFormat pixel_format, uint3
     render_pipeline_descriptor->setVertexFunction(vertex_shader);
     render_pipeline_descriptor->setFragmentFunction(fragment_shader);
     assert(render_pipeline_descriptor);
-    render_pipeline_descriptor->colorAttachments()->object(0)->setPixelFormat(pixel_format);
+    render_pipeline_descriptor->colorAttachments()->object(0)->setPixelFormat(static_cast<MTL::PixelFormat>( pixel_format));
 
     NS::Error *error;
     m_render_pipeline = metal_device->newRenderPipelineState(render_pipeline_descriptor, &error);
@@ -348,6 +357,8 @@ void MyApp::init(MTL::Device *metal_device, MTL::PixelFormat pixel_format, uint3
     vertex_shader->release();
     fragment_shader->release();
     metal_default_library->release();
+
+    std::cout << "Render pipeline state created successfully." << std::endl;
 }
 
 void MyApp::encode_render_command(MTL::RenderCommandEncoder *render_command_encoder,
@@ -387,4 +398,12 @@ void MyClient::OnAfterCreated(CefRefPtr<CefBrowser> browser)
         m_browser->GetHost()->WasResized();   // Initial resize notification
         m_browser->GetHost()->SetFocus(true); // Give focus
     }
+}
+
+std::string get_macos_cache_dir(const std::string &app_name)
+{
+    const char *home = getenv("HOME");
+    if (!home)
+        return "/tmp/" + app_name; // fallback
+    return std::string(home) + "/Library/Caches/" + app_name;
 }

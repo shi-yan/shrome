@@ -1,9 +1,22 @@
 #import "metal_view.h"
-#import <Metal/Metal.h>
+
 #include "imgui.h"
 #include "imgui_impl_metal.h"
-
 #include "imgui_impl_osx.h"
+
+#include "include/cef_app.h"
+#include "include/cef_client.h"
+#include "include/cef_render_handler.h"
+#include "include/wrapper/cef_helpers.h"
+#include "include/wrapper/cef_library_loader.h"
+#include "include/cef_command_line.h" // Required for CefCommandLine
+#include "mycef.h"
+
+@interface MainMetalView () {
+    CefRefPtr<MyApp> _app;
+}
+
+@end
 
 @implementation MainMetalView
 {
@@ -43,8 +56,50 @@
         // Setup Renderer backend
         ImGui_ImplMetal_Init(device);
         ImGui_ImplOSX_Init(self);
+
+        [self setupCEF]; // Initialize CEF
+        CGFloat pixelDensity = [self.window backingScaleFactor];
+        int normalWinWidth = frame.size.width;
+        int normalWinHeight = frame.size.height;
+
+        _app = new MyApp((__bridge MTL::Device *)self.device, normalWinWidth, normalWinHeight, pixelDensity);
+        _app->init((__bridge MTL::Device *)self.device, MTLPixelFormatBGRA8Unorm, normalWinWidth, normalWinHeight);
     }
     return self;
+}
+
+- (int)setupCEF
+{
+    int argc = 0;
+    char **argv = nullptr; // Dummy argument for CEF
+    CefMainArgs main_args(argc, argv);
+    int exit_code = CefExecuteProcess(main_args, _app.get(), nullptr);
+    if (exit_code >= 0)
+    {
+        // The sub-process has exited, so the main process should also exit.
+        return exit_code;
+    }
+
+    CefSettings settings;
+    // Required for windowless (offscreen) rendering. Must be set before CefInitialize. [3, 1]
+    settings.windowless_rendering_enabled = true;
+    CefString(&settings.root_cache_path) = get_macos_cache_dir("shrome");
+
+#if !defined(CEF_USE_SANDBOX)
+    // Required if you're not using the sandbox. For simplicity in a minimal
+    // example, disabling the sandbox is common.
+    settings.no_sandbox = true;
+#endif
+
+    // If you need to specify a cache path for performance or storage
+    // CefString(&settings.cache_path) = "cef_cache";
+
+    if (!CefInitialize(main_args, settings, _app.get(), nullptr))
+    { // [1]
+        return CefGetExitCode();
+    }
+
+    return 0;
 }
 
 - (void)setupMetal
@@ -151,6 +206,22 @@
     self.followMouse = NO; // Set to YES to follow mouse, NO to follow text cursor
 }
 
+- (void)dealloc
+{
+    _app->close(true);
+
+    while (!_app->is_browser_closed())
+    {
+        CefDoMessageLoopWork(); // Or sleep a bit i
+    }
+    CefQuitMessageLoop();
+    _app.reset();
+    // Cleanup
+    ImGui_ImplMetal_Shutdown();
+    ImGui_ImplOSX_Shutdown();
+    ImGui::DestroyContext();
+}
+
 // MTKViewDelegate method - called automatically every frame
 - (void)drawInMTKView:(MTKView *)view
 {
@@ -176,10 +247,9 @@
         // Draw triangle (3 vertices) + coordinate indicators (24 vertices) = 27 total
         [renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:27];
 
-
         // [commandBuffer commit];
 
-       // NSLog(@"MTKView drawInMTKView called - rendering Metal content");
+        // NSLog(@"MTKView drawInMTKView called - rendering Metal content");
 
         // Start the Dear ImGui frame
         ImGui_ImplMetal_NewFrame(renderPassDescriptor);
@@ -260,40 +330,40 @@
 - (void)keyDown:(NSEvent *)event
 {
     // Handle special keys for IME positioning control
-  //  NSString *characters = [event charactersIgnoringModifiers];
-/*
-    if ([characters isEqualToString:@"t"] || [characters isEqualToString:@"T"])
-    {
-        [self toggleMouseFollowing];
-        return;
-    }
+    //  NSString *characters = [event charactersIgnoringModifiers];
+    /*
+        if ([characters isEqualToString:@"t"] || [characters isEqualToString:@"T"])
+        {
+            [self toggleMouseFollowing];
+            return;
+        }
 
-    if ([characters isEqualToString:@"c"] || [characters isEqualToString:@"C"])
-    {
-        // Center the cursor
-        NSPoint center = NSMakePoint(self.bounds.size.width / 2, self.bounds.size.height / 2);
-        [self setCursorPosition:center];
-        return;
-    }
+        if ([characters isEqualToString:@"c"] || [characters isEqualToString:@"C"])
+        {
+            // Center the cursor
+            NSPoint center = NSMakePoint(self.bounds.size.width / 2, self.bounds.size.height / 2);
+            [self setCursorPosition:center];
+            return;
+        }
 
-    if ([characters isEqualToString:@"r"] || [characters isEqualToString:@"R"])
-    {
-        // Random position
-        NSPoint random = NSMakePoint(
-            arc4random_uniform((uint32_t)self.bounds.size.width),
-            arc4random_uniform((uint32_t)self.bounds.size.height));
-        [self setCursorPosition:random];
-        return;
-    }
+        if ([characters isEqualToString:@"r"] || [characters isEqualToString:@"R"])
+        {
+            // Random position
+            NSPoint random = NSMakePoint(
+                arc4random_uniform((uint32_t)self.bounds.size.width),
+                arc4random_uniform((uint32_t)self.bounds.size.height));
+            [self setCursorPosition:random];
+            return;
+        }
 
-    if ([characters isEqualToString:@"d"] || [characters isEqualToString:@"D"])
-    {
-        // Force redraw to show coordinate indicators
-        [self setNeedsDisplay:YES];
-        NSLog(@"Force redraw triggered - coordinate indicators should be visible now");
-        return;
-    }
-*/
+        if ([characters isEqualToString:@"d"] || [characters isEqualToString:@"D"])
+        {
+            // Force redraw to show coordinate indicators
+            [self setNeedsDisplay:YES];
+            NSLog(@"Force redraw triggered - coordinate indicators should be visible now");
+            return;
+        }
+    */
     // Let the input method system handle this
     [self interpretKeyEvents:@[ event ]];
 }

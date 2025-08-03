@@ -1,5 +1,6 @@
 #import <MetalKit/MetalKit.h>
 
+
 @interface MainMetalView : MTKView <NSTextInputClient, MTKViewDelegate>
 
 @property (nonatomic, strong) NSString *inputText;
@@ -18,5 +19,7 @@
 - (void)setCursorPosition:(NSPoint)position;
 - (void)toggleMouseFollowing;
 - (void)setFollowMouse:(BOOL)followMouse;
+
+- (int) setupCEF;
 
 @end

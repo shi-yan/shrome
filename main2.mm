@@ -3,10 +3,35 @@
 #import "metal_view.h"
 #define UNUSED(x) (void)(x)
 
+#include "include/cef_app.h"
+#include "include/cef_client.h"
+#include "include/cef_render_handler.h"
+#include "include/wrapper/cef_helpers.h"
+#include "include/wrapper/cef_library_loader.h"
+
+@interface AppDelegate : NSObject <NSApplicationDelegate>
+@end
+
+@implementation AppDelegate
+
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
+    return YES;
+}
+
+@end
+
 int main(int argc, const char * argv[]) {
+    // Load the CEF library. This is required for macOS.
+    CefScopedLibraryLoader library_loader;
+    if (!library_loader.LoadInMain())
+    {
+        return 1;
+    }
+
     @autoreleasepool {
         NSApplication *app = [NSApplication sharedApplication];
-        UNUSED(app);
+        AppDelegate *delegate = [[AppDelegate alloc] init];
+        [app setDelegate:delegate];
         // Create a window
         NSRect windowRect = NSMakeRect(100, 100, 800, 600);
         NSWindow *window = [[NSWindow alloc] 
@@ -43,6 +68,6 @@ int main(int argc, const char * argv[]) {
         // Run the application
         [NSApp run];
     }
-    
+    CefShutdown();
     return 0;
 }
