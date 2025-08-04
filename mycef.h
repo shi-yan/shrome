@@ -137,7 +137,7 @@ class MyClient : public CefClient,
                  public CefDisplayHandler,
                  public CefContextMenuHandler,
                  public CefKeyboardHandler,
-                    public CefFocusHandler
+                public CefFocusHandler
 {
 public:
     ImGuiMouseCursor m_imgui_cursor_type = ImGuiMouseCursor_Arrow;
@@ -492,7 +492,7 @@ public:
     PopupShowCallback m_popup_show_callback;
     PopupSizedCallback m_popup_sized_callback;
 
-    MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height, uint32_t pixel_density);
+    MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height, uint32_t pixel_density, std::function<void(int64_t)> work_scheduler);
 
     void init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t window_width, uint32_t window_height);
 
@@ -613,7 +613,19 @@ public:
     void encode_render_command(MTL::RenderCommandEncoder *render_command_encoder,
                                MTL::Buffer *projection_buffer);
 
+      // This is the magic hook provided by CEF, with the correct name.
+    void OnScheduleMessagePumpWork(int64_t delay_ms) override {
+        // Now we just call the stored lambda with the delay.
+        std::cout << "OnScheduleMessagePumpWork called with delay: " << delay_ms << std::endl;
+        if (m_work_scheduler) {
+            std::cout << "OnScheduleMessagePumpWork called with delay: " << delay_ms << std::endl;
+            m_work_scheduler(delay_ms);
+        }
+    }
+
 private:
+    std::function<void(int64_t)> m_work_scheduler;
+
     IMPLEMENT_REFCOUNTING(MyApp);
 };
 

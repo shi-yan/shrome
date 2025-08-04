@@ -12,7 +12,127 @@
 #include "include/cef_command_line.h" // Required for CefCommandLine
 #include "mycef.h"
 
-@interface MainMetalView () {
+@implementation AppDelegate
+
+void CefRunLoopSourcePerform(void *info)
+{
+    // We retrieve the AppDelegate instance from the 'info' pointer.
+    // We can then safely call Objective-C methods on it.
+    CefDoMessageLoopWork();
+}
+
+// Called when the run loop source is added to a run loop.
+void CefRunLoopSourceSchedule(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
+{
+    // In a real-world scenario, you could use this to register a signal handler
+    // or a mach port. For our purpose, we don't need to do anything here.
+}
+
+// Called when the run loop source is removed from a run loop.
+void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
+{
+    // Perform any necessary cleanup here.
+}
+
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
+{
+    return YES;
+}
+
+- (void)doCefMessageLoopWork
+{
+    // This is the critical call to process all pending CEF events.
+    CefDoMessageLoopWork();
+}
+
+- (void)scheduleCefMessageLoopWork:(int64_t)delay_ms
+{
+    // 1. Cancel any existing timer to fulfill the contract of OnScheduleMessagePumpWork.
+    if (_cefWorkTimer && [_cefWorkTimer isValid])
+    {
+        [_cefWorkTimer invalidate];
+    }
+    _cefWorkTimer = nil;
+
+    // 2. Handle the different delay scenarios.
+    if (delay_ms <= 0)
+    {
+        // If the delay is <= 0, the work should be done immediately.
+        // We signal the run loop source to execute the work on the next iteration.
+        if (_cefRunLoopSource)
+        {
+            CFRunLoopSourceSignal(_cefRunLoopSource);
+        }
+        CFRunLoopWakeUp(CFRunLoopGetMain());
+    }
+    else
+    {
+        // If the delay is > 0, schedule a timer to run the work after the specified delay.
+        // NSTimer will call our doCefMessageLoopWork method on the main thread.
+        _cefWorkTimer = [NSTimer scheduledTimerWithTimeInterval:(double)delay_ms / 1000.0
+                                                         target:self
+                                                       selector:@selector(doCefMessageLoopWork)
+                                                       userInfo:nil
+                                                        repeats:NO];
+    }
+}
+
+- (void)applicationDidFinishLaunching:(NSNotification *)aNotification
+{
+    // ---- 1. Create and Add the CFRunLoopSource ----
+    // We define the callbacks for our run loop source.
+    CFRunLoopSourceContext context = {
+        .version = 0,
+        .info = (__bridge void *)self, // Pass a reference to our AppDelegate
+        .retain = NULL,
+        .release = NULL,
+        .copyDescription = NULL,
+        .equal = NULL,
+        .hash = NULL,
+        .schedule = CefRunLoopSourceSchedule,
+        .cancel = CefRunLoopSourceCancel,
+        .perform = CefRunLoopSourcePerform};
+
+    // Create the run loop source (a Source0, which requires manual signaling).
+    _cefRunLoopSource = CFRunLoopSourceCreate(kCFAllocatorDefault, 0, &context);
+
+    // Add the run loop source to the main run loop in the default mode.
+    CFRunLoopAddSource(CFRunLoopGetMain(), _cefRunLoopSource, kCFRunLoopDefaultMode);
+
+    // You must make the very first call to prime the CEF message loop.
+    CefDoMessageLoopWork();
+
+    NSLog(@"App is running, CEF message loop is now event-driven...");
+}
+
+- (void)applicationWillTerminate:(NSNotification *)aNotification
+{
+    // ---- 4. Cleanup ----
+    // Remove the run loop source from the main run loop.
+    if (_cefRunLoopSource)
+    {
+        CFRunLoopRemoveSource(CFRunLoopGetMain(), _cefRunLoopSource, kCFRunLoopDefaultMode);
+        CFRunLoopSourceInvalidate(_cefRunLoopSource);
+        CFRelease(_cefRunLoopSource);
+        _cefRunLoopSource = NULL;
+    }
+
+    if (_cefWorkTimer && [_cefWorkTimer isValid])
+    {
+        [_cefWorkTimer invalidate];
+    }
+    _cefWorkTimer = nil;
+
+    // Perform any final cleanup for your CEF handler and shutdown.
+    // delete _cefHandler; // Conceptual C++ code
+    CefShutdown();
+    NSLog(@"App terminated, CEF shutdown complete.");
+}
+
+@end
+
+@interface MainMetalView ()
+{
     CefRefPtr<MyApp> _app;
 }
 
@@ -26,7 +146,7 @@
     BOOL _hasMarkedText;
 }
 
-- (instancetype)initWithFrame:(NSRect)frame device:(id<MTLDevice>)device
+- (instancetype)initWithFrame:(NSRect)frame device:(id<MTLDevice>)device appDelegate:(AppDelegate *)appDelegate
 {
     self = [super initWithFrame:frame device:device];
     if (self)
@@ -62,8 +182,25 @@
         int normalWinWidth = frame.size.width;
         int normalWinHeight = frame.size.height;
 
-        _app = new MyApp((__bridge MTL::Device *)self.device, normalWinWidth, normalWinHeight, pixelDensity);
+        __weak AppDelegate *weakAppDelegate = appDelegate;
+
+        // The lambda to be passed to the C++ handler.
+        // It captures the weak reference.
+        std::function<void(int64_t)> workScheduler = [weakAppDelegate](int64_t delay_ms)
+        {
+            // It's crucial to get a strong reference inside the lambda before using it.
+            AppDelegate *strongAppDelegate = weakAppDelegate;
+            if (strongAppDelegate)
+            {
+                std::cout << "called scheduleCefMessageLoopWork with delay: " << delay_ms << std::endl;
+                // Now it's safe to call the Objective-C method.
+                [strongAppDelegate scheduleCefMessageLoopWork:delay_ms];
+            }
+        };
+
+        _app = new MyApp((__bridge MTL::Device *)self.device, normalWinWidth, normalWinHeight, pixelDensity, workScheduler);
         _app->init((__bridge MTL::Device *)self.device, MTLPixelFormatBGRA8Unorm, normalWinWidth, normalWinHeight);
+            CefDoMessageLoopWork();
     }
     return self;
 }

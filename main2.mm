@@ -9,16 +9,6 @@
 #include "include/wrapper/cef_helpers.h"
 #include "include/wrapper/cef_library_loader.h"
 
-@interface AppDelegate : NSObject <NSApplicationDelegate>
-@end
-
-@implementation AppDelegate
-
-- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
-    return YES;
-}
-
-@end
 
 int main(int argc, const char * argv[]) {
     // Load the CEF library. This is required for macOS.
@@ -68,6 +58,6 @@ int main(int argc, const char * argv[]) {
         // Run the application
         [NSApp run];
     }
-    CefShutdown();
+    //CefShutdown();
     return 0;
 }

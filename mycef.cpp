@@ -9,8 +9,12 @@
 
 #include <iostream>
 
-MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height,uint32_t pixel_density)
-    : m_metal_device(metal_device), m_window_width(window_width), m_window_height(window_height),m_pixel_density(pixel_density)
+MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height,uint32_t pixel_density,std::function<void(int64_t)> work_scheduler)
+    : m_metal_device(metal_device), 
+    m_window_width(window_width), 
+    m_window_height(window_height),
+    m_pixel_density(pixel_density),
+    m_work_scheduler(work_scheduler)
 {
     // Initialize any necessary resources here, such as creating a Metal texture.
     // For example:
