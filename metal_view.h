@@ -32,6 +32,9 @@
 - (void)toggleMouseFollowing;
 - (void)setFollowMouse:(BOOL)followMouse;
 
+// Helper method for converting modifier flags
+- (uint32_t)convertModifiers:(NSUInteger)appKitModifiers;
+
 - (int) setupCEF;
 
 @end

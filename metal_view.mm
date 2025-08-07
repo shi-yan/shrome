@@ -104,7 +104,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         ImGui_ImplMetal_Init(device);
         ImGui_ImplOSX_Init(self);
 
-        CGFloat pixelDensity = [self.window backingScaleFactor];
+        CGFloat pixelDensity = [NSScreen.mainScreen backingScaleFactor];
         pixelDensity = pixelDensity > 0 ? pixelDensity : 1.0;
         int normalWinWidth = frame.size.width;
         int normalWinHeight = frame.size.height;
@@ -456,6 +456,112 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 
     NSLog(@"Text cursor moved to: (%.1f, %.1f)", locationInView.x, locationInView.y);
     [self setNeedsDisplay:YES];
+    
+    // Convert to CEF mouse event and inject
+    CefMouseEvent mouseEvent;
+    // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
+    mouseEvent.x = static_cast<int>(locationInView.x);
+    mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
+    mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+    
+    CefBrowserHost::MouseButtonType buttonType = CefBrowserHost::MouseButtonType::MBT_LEFT;
+    if ([event buttonNumber] == 1) {
+        buttonType = CefBrowserHost::MouseButtonType::MBT_RIGHT;
+    } else if ([event buttonNumber] == 2) {
+        buttonType = CefBrowserHost::MouseButtonType::MBT_MIDDLE;
+    }
+    
+    _app->inject_mouse_up_down(mouseEvent, buttonType, false, [event clickCount]);
+}
+
+- (void)mouseUp:(NSEvent *)event
+{
+    NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
+    
+    // Convert to CEF mouse event and inject
+    CefMouseEvent mouseEvent;
+    // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
+    mouseEvent.x = static_cast<int>(locationInView.x);
+    mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
+    mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+    
+    CefBrowserHost::MouseButtonType buttonType = CefBrowserHost::MouseButtonType::MBT_LEFT;
+    if ([event buttonNumber] == 1) {
+        buttonType = CefBrowserHost::MouseButtonType::MBT_RIGHT;
+    } else if ([event buttonNumber] == 2) {
+        buttonType = CefBrowserHost::MouseButtonType::MBT_MIDDLE;
+    }
+    
+    _app->inject_mouse_up_down(mouseEvent, buttonType, true, [event clickCount]);
+}
+
+- (void)rightMouseDown:(NSEvent *)event
+{
+    [self mouseDown:event];
+}
+
+- (void)rightMouseUp:(NSEvent *)event
+{
+    [self mouseUp:event];
+}
+
+- (void)otherMouseDown:(NSEvent *)event
+{
+    [self mouseDown:event];
+}
+
+- (void)otherMouseUp:(NSEvent *)event
+{
+    [self mouseUp:event];
+}
+
+- (void)scrollWheel:(NSEvent *)event
+{
+    // Convert scroll wheel event to CEF mouse wheel event
+    CefMouseEvent mouseEvent;
+    NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
+    // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
+    mouseEvent.x = static_cast<int>(locationInView.x);
+    mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
+    mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+    
+    // Convert scroll delta to CEF format
+    // CEF expects delta in lines, but NSEvent provides pixels
+    // We'll convert approximately (1 line = ~40 pixels)
+    int deltaX = static_cast<int>([event scrollingDeltaX] / 40.0);
+    int deltaY = static_cast<int>([event scrollingDeltaY] / 40.0);
+    
+    _app->inject_mouse_wheel(mouseEvent, deltaX, deltaY);
+}
+
+// Helper method to convert AppKit modifier flags to CEF modifier flags
+- (uint32_t)convertModifiers:(NSUInteger)appKitModifiers
+{
+    uint32_t cefModifiers = 0;
+    
+    if (appKitModifiers & NSEventModifierFlagCommand) {
+        cefModifiers |= EVENTFLAG_COMMAND_DOWN;
+    }
+    if (appKitModifiers & NSEventModifierFlagShift) {
+        cefModifiers |= EVENTFLAG_SHIFT_DOWN;
+    }
+    if (appKitModifiers & NSEventModifierFlagOption) {
+        cefModifiers |= EVENTFLAG_ALT_DOWN;
+    }
+    if (appKitModifiers & NSEventModifierFlagControl) {
+        cefModifiers |= EVENTFLAG_CONTROL_DOWN;
+    }
+    if (appKitModifiers & NSEventModifierFlagCapsLock) {
+        cefModifiers |= EVENTFLAG_CAPS_LOCK_ON;
+    }
+   /* if (appKitModifiers & NSEventModifierFlagFunction) {
+        cefModifiers |= EVENTFLAG_FUNCTION_DOWN;
+    }*/
+    if (appKitModifiers & NSEventModifierFlagNumericPad) {
+        cefModifiers |= EVENTFLAG_NUM_LOCK_ON;
+    }
+    
+    return cefModifiers;
 }
 
 - (void)mouseMoved:(NSEvent *)event
@@ -465,6 +571,17 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
         self.lastMousePosition = locationInView;
     }
+    
+    // Convert to CEF mouse event and inject
+    NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
+    CefMouseEvent mouseEvent;
+    // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
+    mouseEvent.x = static_cast<int>(locationInView.x);
+    mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
+    //std::cout << "mouse motion " << mouseEvent.x << ", " << mouseEvent.y << std::endl;
+    mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+    
+    _app->inject_mouse_motion(mouseEvent);
 }
 
 - (void)updateTrackingAreas
