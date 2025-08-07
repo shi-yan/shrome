@@ -70,7 +70,7 @@ public:
 
         screen_info.rect = CefRect(0, 0, m_width, m_height); // Full screen in DIPs
         screen_info.available_rect = CefRect(0, 0, m_width, m_height); // Usable screen in DIPs (e.g., excluding taskbars)
-
+//std::cout << "get screen info: " << m_width << ", " << m_height << ", " << dpi_scale_factor << std::endl;
         return true; // Indicate that you provided the information
     }
 
@@ -108,7 +108,7 @@ public:
         {
             m_rendering_callback(type, dirtyRects, buffer, width, height);
         }
-        std::cout << "on paint called: " << width << ", " << height << std::endl;
+        //std::cout << "on paint called: " << width << ", " << height << std::endl;
     }
 
     // Other CefRenderHandler methods can be left as default or implemented as needed.
@@ -267,6 +267,7 @@ public:
         {
             if (m_browser->GetHost()->IsWindowRenderingDisabled())
             {
+                //std::cout << "render frame" << std::endl;
                 m_browser->GetHost()->SendExternalBeginFrame();
             }
         }
@@ -526,7 +527,7 @@ public:
 
         // Create the offscreen browser
         // You might want to load a specific URL here instead of "about:blank"
-        CefBrowserHost::CreateBrowser(window_info, m_client, "https://prosemirror.net", browser_settings, nullptr, nullptr); // [1]
+        CefBrowserHost::CreateBrowser(window_info, m_client, "https://www.youtube.com/watch?v=aDdgU2gPtQQ", browser_settings, nullptr, nullptr); // [1]
     }
 
     void close(bool force_close)
@@ -558,6 +559,7 @@ public:
     {
         if (m_client)
         {
+            //std::cout << "request new frame" << std::endl;
             m_client->request_new_frame();
         }
     }

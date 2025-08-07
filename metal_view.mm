@@ -105,6 +105,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         ImGui_ImplOSX_Init(self);
 
         CGFloat pixelDensity = [self.window backingScaleFactor];
+        pixelDensity = pixelDensity > 0 ? pixelDensity : 1.0;
         int normalWinWidth = frame.size.width;
         int normalWinHeight = frame.size.height;
 
@@ -285,7 +286,12 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 // MTKViewDelegate method - called automatically every frame
 - (void)drawInMTKView:(MTKView *)view
 {
+    // Process CEF message loop work
+    CefDoMessageLoopWork();
+    
+    // Request new frame BEFORE starting Metal rendering
     _app->request_new_frame();
+    
     ImGuiIO &io = ImGui::GetIO();
     io.DisplaySize.x = view.bounds.size.width;
     io.DisplaySize.y = view.bounds.size.height;

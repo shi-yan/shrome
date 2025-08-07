@@ -60,7 +60,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                                 int width,
                                 int height)
     {
-        std::cout << "texture ready " << width << ", " << height << std::endl;
+        //std::cout << "texture ready " << width << ", " << height << std::endl;
         if (type == CefRenderHandler::PaintElementType::PET_VIEW)
         {
             if (m_texture && (m_texture_width != static_cast<uint32_t>(width) || m_texture_height != static_cast<uint32_t>(height)))
@@ -96,7 +96,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 {
                     size_t bitmap_stride = width * 4; // Assuming 4 bytes per pixel (BGRA format)
 
-                    // std::cout << "width " << width << ", height " << height << std::endl;
+                     std::cout << "full texture update width " << width << ", height " << height << std::endl;
                     //  Replace the region with the new data
                     m_texture->replaceRegion(MTL::Region(0, 0, 0, width, height, 1), 0, buffer, bitmap_stride);
                 }
@@ -104,7 +104,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 {
                     // This bytesPerRow is correct for the overall buffer provided by OnPaint
                     NS::UInteger bytesPerRow = width * 4; // Assuming 4 bytes per pixel (BGRA format)
-
+                    //std::cout << "partial texture update for " << dirtyRects.size() << " rects" << std::endl;
                     for (const auto &rect : dirtyRects)
                     {
                         // Calculate the region to replace on the Metal texture
@@ -272,6 +272,7 @@ MyRenderHandler::MyRenderHandler(int width, int height, int pixel_density, Rende
       m_popup_show_callback(popup_show_callback),
       m_popup_sized_callback(popup_sized_callback)
 {
+    std::cout << "MyRenderHandler" << m_width << ", " << m_height << ", " << m_pixel_density << std::endl;
 }
 
 void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t window_width, uint32_t window_height)
@@ -380,7 +381,7 @@ void MyApp::encode_render_command(MTL::RenderCommandEncoder *render_command_enco
         NS::UInteger vertexStart = 0;
         NS::UInteger vertexCount = 4;
         render_command_encoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, vertexStart, vertexCount);
-
+       // std::cout << "draw cef texture " << m_texture_width << ", " << m_texture_height << std::endl;
         if (m_should_show_popup && m_popup_texture && m_popup_triangle_vertex_buffer && m_popup_offset_buffer)
         {
             render_command_encoder->setVertexBuffer(m_popup_triangle_vertex_buffer, 0, 0);
@@ -418,7 +419,7 @@ void MyApp::OnScheduleMessagePumpWork(int64_t delay_ms)
     if (delay_ms <= 0)
     {
         dispatch_async(dispatch_get_main_queue(), ^{
-           std::cout << "OnScheduleMessagePumpWork called with delay: " << delay_ms << " ms" << std::endl;
+         //  std::cout << "OnScheduleMessagePumpWork called with delay: " << delay_ms << " ms" << std::endl;
            CefDoMessageLoopWork();
         });
     } else {
