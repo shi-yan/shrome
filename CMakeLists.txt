@@ -52,14 +52,6 @@ FetchContent_Populate(
     URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS15.2_iOS18.2.zip
 )
 
-FetchContent_Declare(
-	glm
-	GIT_REPOSITORY	https://github.com/g-truc/glm.git
-	GIT_TAG 	bf71a834948186f4097caa076cd2663c69a10e1e #refs/tags/1.0.1
-)
-
-FetchContent_MakeAvailable(glm)
-
 include(ExternalProject)
 include(CheckLanguage)
 
@@ -75,10 +67,7 @@ endmacro()
 print_all_variables()
 # SHROME sources.
 set(SHROME_SRCS
-  simple_app.cc
-  simple_app.h
-  simple_handler.cc
-  simple_handler.h
+
   )
 set(SHROME_SRCS_LINUX
   cefsimple_linux.cc
@@ -94,8 +83,7 @@ set(SHROME_SRCS_MAC
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
  # keycode_conversion.cpp
- #simple_handler_mac.mm
-  main2.mm
+  main.mm
   metal_view.mm
   mycef.mm
   )
@@ -263,7 +251,6 @@ string(REPLACE "-Werror" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
   add_dependencies(${CEF_TARGET} libcef_dll_wrapper)
 
   target_link_libraries(${CEF_TARGET} libcef_dll_wrapper ${CEF_STANDARD_LIBS}
-  glm::glm 
   ${COCOA_FRAMEWORK} ${METAL_FRAMEWORK} ${METALKIT_FRAMEWORK}
   ${GAMECONTROLLER_FRAMEWORK}
   )

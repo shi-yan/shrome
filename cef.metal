@@ -1,6 +1,6 @@
 
 #include <metal_stdlib>
-#include "teapot_data.h"
+
 using namespace metal;
 
 
