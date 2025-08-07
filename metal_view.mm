@@ -13,9 +13,10 @@
 #include "mycef.h"
 #include <simd/simd.h>
 
-namespace MTL {
-class RenderCommandEncoder;
-class Buffer;
+namespace MTL
+{
+    class RenderCommandEncoder;
+    class Buffer;
 }
 
 matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, float near, float far)
@@ -70,6 +71,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     id<MTLRenderPipelineState> _pipelineState;
     NSMutableString *_textBuffer;
     id<MTLBuffer> projection_buffer;
+    id<MTLBuffer> triangle_vertex_buffer;
     BOOL _hasMarkedText;
 }
 
@@ -249,6 +251,15 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     }
     matrix_float4x4 projection_matrix = matrix_ortho(0.0f, (float)frame.size.width, (float)frame.size.height, 0.0f, 1.0f, -1.0f);
     memcpy(projection_buffer.contents, &projection_matrix, sizeof(matrix_float4x4));
+
+    simd::float4 quad_vertices[] = {
+        {0.0f, 0.0f, 0.0f, 0.0f},
+        {0.0f, (float)frame.size.height, 0.0f, 1.0f},
+        {(float)frame.size.width, 0.0f, 1.0f, 0.0f},
+        {(float)frame.size.width, (float)frame.size.height, 1.0f, 1.0f}};
+
+    triangle_vertex_buffer = [self.device newBufferWithLength:sizeof(quad_vertices) options:MTLResourceStorageModeShared];
+    memcpy(triangle_vertex_buffer.contents, &quad_vertices, sizeof(quad_vertices));
 }
 
 - (void)setupTextInput
@@ -288,10 +299,10 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 {
     // Process CEF message loop work
     CefDoMessageLoopWork();
-    
+
     // Request new frame BEFORE starting Metal rendering
     _app->request_new_frame();
-    
+
     ImGuiIO &io = ImGui::GetIO();
     io.DisplaySize.x = view.bounds.size.width;
     io.DisplaySize.y = view.bounds.size.height;
@@ -313,9 +324,9 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         // Draw triangle (3 vertices) + coordinate indicators (24 vertices) = 27 total
         //[renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:27];
 
-        [renderEncoder pushDebugGroup: @"Metal View Rendering"];
+        [renderEncoder pushDebugGroup:@"Metal View Rendering"];
 
-        _app->encode_render_command((__bridge MTL::RenderCommandEncoder *) renderEncoder,(__bridge MTL::Buffer *) projection_buffer);
+        _app->encode_render_command((__bridge MTL::RenderCommandEncoder *)renderEncoder, (__bridge MTL::Buffer *)projection_buffer, (__bridge MTL::Buffer *)triangle_vertex_buffer);
 
         [renderEncoder popDebugGroup];
 
@@ -388,13 +399,40 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 // MTKViewDelegate method - called when view size changes
 - (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size
 {
-    NSLog(@"MTKView size changed to: %.0f x %.0f", size.width, size.height);
-    // Update any size-dependent resources here (like viewport, projection matrix, etc.)
+    // here size is width * pixel_density.
+}
 
+// Override setFrame to handle view bounds changes
+- (void)setFrame:(NSRect)frameRect
+{
+    [super setFrame:frameRect];
+
+    // Update render handler dimensions and pixel density
+    CGFloat pixelDensity = [NSScreen.mainScreen backingScaleFactor];
+    pixelDensity = pixelDensity > 0 ? pixelDensity : 1.0;
+    _app->update_render_handler_dimensions((int)frameRect.size.width, (int)frameRect.size.height, (int)pixelDensity);
+
+    // Update any size-dependent resources here (like viewport, projection matrix, etc.)
     if (projection_buffer)
     {
-        matrix_float4x4 projection_matrix = matrix_ortho(0.0f, (float)size.width, (float)size.height, 0.0f, 1.0f, -1.0f);
+        matrix_float4x4 projection_matrix = matrix_ortho(0.0f, (float)frameRect.size.width, (float)frameRect.size.height, 0.0f, 1.0f, -1.0f);
         memcpy(projection_buffer.contents, &projection_matrix, sizeof(matrix_float4x4));
+    }
+    if (triangle_vertex_buffer)
+    {
+        simd::float4 quad_vertices[] = {
+            {0.0f, 0.0f, 0.0f, 0.0f},
+            {0.0f, (float)frameRect.size.height, 0.0f, 1.0f},
+            {(float)frameRect.size.width, 0.0f, 1.0f, 0.0f},
+            {(float)frameRect.size.width, (float)frameRect.size.height, 1.0f, 1.0f}};
+
+        memcpy(triangle_vertex_buffer.contents, &quad_vertices, sizeof(quad_vertices));
+    }
+
+    // Notify CEF about the size change
+    if (_app && _app->get_browser() && _app->get_browser()->IsValid())
+    {
+        _app->get_browser()->GetHost()->WasResized();
     }
 }
 
@@ -456,42 +494,48 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 
     NSLog(@"Text cursor moved to: (%.1f, %.1f)", locationInView.x, locationInView.y);
     [self setNeedsDisplay:YES];
-    
+
     // Convert to CEF mouse event and inject
     CefMouseEvent mouseEvent;
     // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
     mouseEvent.x = static_cast<int>(locationInView.x);
     mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
     mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
-    
+
     CefBrowserHost::MouseButtonType buttonType = CefBrowserHost::MouseButtonType::MBT_LEFT;
-    if ([event buttonNumber] == 1) {
+    if ([event buttonNumber] == 1)
+    {
         buttonType = CefBrowserHost::MouseButtonType::MBT_RIGHT;
-    } else if ([event buttonNumber] == 2) {
+    }
+    else if ([event buttonNumber] == 2)
+    {
         buttonType = CefBrowserHost::MouseButtonType::MBT_MIDDLE;
     }
-    
+
     _app->inject_mouse_up_down(mouseEvent, buttonType, false, [event clickCount]);
 }
 
 - (void)mouseUp:(NSEvent *)event
 {
     NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
-    
+
     // Convert to CEF mouse event and inject
     CefMouseEvent mouseEvent;
     // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
     mouseEvent.x = static_cast<int>(locationInView.x);
     mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
     mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
-    
+
     CefBrowserHost::MouseButtonType buttonType = CefBrowserHost::MouseButtonType::MBT_LEFT;
-    if ([event buttonNumber] == 1) {
+    if ([event buttonNumber] == 1)
+    {
         buttonType = CefBrowserHost::MouseButtonType::MBT_RIGHT;
-    } else if ([event buttonNumber] == 2) {
+    }
+    else if ([event buttonNumber] == 2)
+    {
         buttonType = CefBrowserHost::MouseButtonType::MBT_MIDDLE;
     }
-    
+
     _app->inject_mouse_up_down(mouseEvent, buttonType, true, [event clickCount]);
 }
 
@@ -524,13 +568,13 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     mouseEvent.x = static_cast<int>(locationInView.x);
     mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
     mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
-    
+
     // Convert scroll delta to CEF format
     // CEF expects delta in lines, but NSEvent provides pixels
     // We'll convert approximately (1 line = ~40 pixels)
     int deltaX = static_cast<int>([event scrollingDeltaX] / 40.0);
     int deltaY = static_cast<int>([event scrollingDeltaY] / 40.0);
-    
+
     _app->inject_mouse_wheel(mouseEvent, deltaX, deltaY);
 }
 
@@ -538,29 +582,35 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 - (uint32_t)convertModifiers:(NSUInteger)appKitModifiers
 {
     uint32_t cefModifiers = 0;
-    
-    if (appKitModifiers & NSEventModifierFlagCommand) {
+
+    if (appKitModifiers & NSEventModifierFlagCommand)
+    {
         cefModifiers |= EVENTFLAG_COMMAND_DOWN;
     }
-    if (appKitModifiers & NSEventModifierFlagShift) {
+    if (appKitModifiers & NSEventModifierFlagShift)
+    {
         cefModifiers |= EVENTFLAG_SHIFT_DOWN;
     }
-    if (appKitModifiers & NSEventModifierFlagOption) {
+    if (appKitModifiers & NSEventModifierFlagOption)
+    {
         cefModifiers |= EVENTFLAG_ALT_DOWN;
     }
-    if (appKitModifiers & NSEventModifierFlagControl) {
+    if (appKitModifiers & NSEventModifierFlagControl)
+    {
         cefModifiers |= EVENTFLAG_CONTROL_DOWN;
     }
-    if (appKitModifiers & NSEventModifierFlagCapsLock) {
+    if (appKitModifiers & NSEventModifierFlagCapsLock)
+    {
         cefModifiers |= EVENTFLAG_CAPS_LOCK_ON;
     }
-   /* if (appKitModifiers & NSEventModifierFlagFunction) {
-        cefModifiers |= EVENTFLAG_FUNCTION_DOWN;
-    }*/
-    if (appKitModifiers & NSEventModifierFlagNumericPad) {
+    /* if (appKitModifiers & NSEventModifierFlagFunction) {
+         cefModifiers |= EVENTFLAG_FUNCTION_DOWN;
+     }*/
+    if (appKitModifiers & NSEventModifierFlagNumericPad)
+    {
         cefModifiers |= EVENTFLAG_NUM_LOCK_ON;
     }
-    
+
     return cefModifiers;
 }
 
@@ -571,16 +621,16 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
         self.lastMousePosition = locationInView;
     }
-    
+
     // Convert to CEF mouse event and inject
     NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
     CefMouseEvent mouseEvent;
     // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
     mouseEvent.x = static_cast<int>(locationInView.x);
     mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
-    //std::cout << "mouse motion " << mouseEvent.x << ", " << mouseEvent.y << std::endl;
+    // std::cout << "mouse motion " << mouseEvent.x << ", " << mouseEvent.y << std::endl;
     mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
-    
+
     _app->inject_mouse_motion(mouseEvent);
 }
 

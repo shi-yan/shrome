@@ -9,11 +9,11 @@
 #include <dispatch/dispatch.h>
 #include <iostream>
 
-MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height,uint32_t pixel_density)
-    : m_metal_device(metal_device), 
-    m_window_width(window_width), 
-    m_window_height(window_height),
-    m_pixel_density(pixel_density)
+MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height, uint32_t pixel_density)
+    : m_metal_device(metal_device),
+      m_window_width(window_width),
+      m_window_height(window_height),
+      m_pixel_density(pixel_density)
 {
     // Initialize any necessary resources here, such as creating a Metal texture.
     // For example:
@@ -60,7 +60,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                                 int width,
                                 int height)
     {
-        //std::cout << "texture ready " << width << ", " << height << std::endl;
+        // std::cout << "texture ready " << width << ", " << height << std::endl;
         if (type == CefRenderHandler::PaintElementType::PET_VIEW)
         {
             if (m_texture && (m_texture_width != static_cast<uint32_t>(width) || m_texture_height != static_cast<uint32_t>(height)))
@@ -96,7 +96,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 {
                     size_t bitmap_stride = width * 4; // Assuming 4 bytes per pixel (BGRA format)
 
-                     std::cout << "full texture update width " << width << ", height " << height << std::endl;
+                    std::cout << "full texture update width " << width << ", height " << height << std::endl;
                     //  Replace the region with the new data
                     m_texture->replaceRegion(MTL::Region(0, 0, 0, width, height, 1), 0, buffer, bitmap_stride);
                 }
@@ -104,7 +104,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 {
                     // This bytesPerRow is correct for the overall buffer provided by OnPaint
                     NS::UInteger bytesPerRow = width * 4; // Assuming 4 bytes per pixel (BGRA format)
-                    //std::cout << "partial texture update for " << dirtyRects.size() << " rects" << std::endl;
+                    // std::cout << "partial texture update for " << dirtyRects.size() << " rects" << std::endl;
                     for (const auto &rect : dirtyRects)
                     {
                         // Calculate the region to replace on the Metal texture
@@ -131,7 +131,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
         }
         else if (type == CefRenderHandler::PaintElementType::PET_POPUP && m_should_show_popup)
         {
-            if (m_popup_texture && (m_popup_texture_width != static_cast<uint32_t>( width) || m_popup_texture_height != static_cast<uint32_t>(height)))
+            if (m_popup_texture && (m_popup_texture_width != static_cast<uint32_t>(width) || m_popup_texture_height != static_cast<uint32_t>(height)))
             {
                 m_popup_texture->release();
                 m_popup_texture = nullptr;
@@ -201,7 +201,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
 void MyApp::OnBeforeCommandLineProcessing(const CefString &process_type,
                                           CefRefPtr<CefCommandLine> command_line)
 {
-   // std::cout << "OnBeforeCommandLineProcessing called for process type: " << process_type.ToString() << std::endl;
+    // std::cout << "OnBeforeCommandLineProcessing called for process type: " << process_type.ToString() << std::endl;
     // Check if it's the browser process (process_type will be empty for browser process)
     if (process_type.empty())
     {
@@ -229,12 +229,6 @@ MyApp::~MyApp()
     {
         m_depth_stencil_state_disabled->release();
         m_depth_stencil_state_disabled = nullptr;
-    }
-
-    if (m_triangle_vertex_buffer)
-    {
-        m_triangle_vertex_buffer->release();
-        m_triangle_vertex_buffer = nullptr;
     }
 
     if (m_render_pipeline)
@@ -267,12 +261,20 @@ MyApp::~MyApp()
 
 MyRenderHandler::MyRenderHandler(int width, int height, int pixel_density, RenderingCallback rendering_callback, PopupShowCallback popup_show_callback,
                                  PopupSizedCallback popup_sized_callback)
-    :m_width(width),m_height(height), m_pixel_density(pixel_density),
-    m_rendering_callback(rendering_callback),
+    : m_width(width), m_height(height), m_pixel_density(pixel_density),
+      m_rendering_callback(rendering_callback),
       m_popup_show_callback(popup_show_callback),
       m_popup_sized_callback(popup_sized_callback)
 {
     std::cout << "MyRenderHandler" << m_width << ", " << m_height << ", " << m_pixel_density << std::endl;
+}
+
+void MyRenderHandler::UpdateDimensions(int width, int height, int pixel_density)
+{
+    m_width = width;
+    m_height = height;
+    m_pixel_density = pixel_density;
+    std::cout << "MyRenderHandler updated dimensions: " << m_width << ", " << m_height << ", " << m_pixel_density << std::endl;
 }
 
 void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t window_width, uint32_t window_height)
@@ -325,17 +327,6 @@ void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t wind
     m_depth_stencil_state_disabled = metal_device->newDepthStencilState(ds_desc_disabled);
     ds_desc_disabled->release();
 
-    const float width = static_cast<float>(m_texture_width);
-    const float height = static_cast<float>(m_texture_height);
-    simd::float4 quad_vertices[] = {
-        {0.0f, 0.0f, 0.0f, 0.0f},
-        {0.0f, height, 0.0f, 1.0f},
-        {width, 0.0f, 1.0f, 0.0f},
-        {width, height, 1.0f, 1.0f}};
-
-    m_triangle_vertex_buffer = metal_device->newBuffer(&quad_vertices,
-                                                       sizeof(quad_vertices),
-                                                       MTL::ResourceStorageModeShared);
     MTL::Library *metal_default_library = metal_device->newDefaultLibrary();
     if (!metal_default_library)
     {
@@ -353,7 +344,7 @@ void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t wind
     render_pipeline_descriptor->setVertexFunction(vertex_shader);
     render_pipeline_descriptor->setFragmentFunction(fragment_shader);
     assert(render_pipeline_descriptor);
-    render_pipeline_descriptor->colorAttachments()->object(0)->setPixelFormat(static_cast<MTL::PixelFormat>( pixel_format));
+    render_pipeline_descriptor->colorAttachments()->object(0)->setPixelFormat(static_cast<MTL::PixelFormat>(pixel_format));
 
     NS::Error *error;
     m_render_pipeline = metal_device->newRenderPipelineState(render_pipeline_descriptor, &error);
@@ -367,13 +358,13 @@ void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t wind
 }
 
 void MyApp::encode_render_command(MTL::RenderCommandEncoder *render_command_encoder,
-                                  MTL::Buffer *projection_buffer)
+                                  MTL::Buffer *projection_buffer, MTL::Buffer *triangle_vertex_buffer)
 {
     if (m_texture)
     {
         render_command_encoder->setRenderPipelineState(m_render_pipeline);
         render_command_encoder->setDepthStencilState(m_depth_stencil_state_disabled);
-        render_command_encoder->setVertexBuffer(m_triangle_vertex_buffer, 0, 0);
+        render_command_encoder->setVertexBuffer(triangle_vertex_buffer, 0, 0);
         render_command_encoder->setVertexBuffer(projection_buffer, 0, 1);
         render_command_encoder->setVertexBuffer(m_zero_offset_buffer, 0, 2);
         render_command_encoder->setCullMode(MTL::CullMode::CullModeNone);
@@ -381,23 +372,22 @@ void MyApp::encode_render_command(MTL::RenderCommandEncoder *render_command_enco
         NS::UInteger vertexStart = 0;
         NS::UInteger vertexCount = 4;
         render_command_encoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, vertexStart, vertexCount);
-       // std::cout << "draw cef texture " << m_texture_width << ", " << m_texture_height << std::endl;
+        // std::cout << "draw cef texture " << m_texture_width << ", " << m_texture_height << std::endl;
         if (m_should_show_popup && m_popup_texture && m_popup_triangle_vertex_buffer && m_popup_offset_buffer)
         {
             render_command_encoder->setVertexBuffer(m_popup_triangle_vertex_buffer, 0, 0);
             render_command_encoder->setVertexBuffer(m_popup_offset_buffer, 0, 2);
             render_command_encoder->setCullMode(MTL::CullMode::CullModeNone);
             render_command_encoder->setFragmentTexture(m_popup_texture, /* index */ 0);
-      
+
             render_command_encoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, vertexStart, vertexCount);
         }
     }
-
 }
 
 void MyClient::OnAfterCreated(CefRefPtr<CefBrowser> browser)
 {
-     std::cout << "m_browser assigned --- " << std::endl;
+    std::cout << "m_browser assigned --- " << std::endl;
     m_browser = browser;
     if (m_browser->GetHost())
     {
@@ -419,13 +409,15 @@ void MyApp::OnScheduleMessagePumpWork(int64_t delay_ms)
     if (delay_ms <= 0)
     {
         dispatch_async(dispatch_get_main_queue(), ^{
-         //  std::cout << "OnScheduleMessagePumpWork called with delay: " << delay_ms << " ms" << std::endl;
-           CefDoMessageLoopWork();
+          //  std::cout << "OnScheduleMessagePumpWork called with delay: " << delay_ms << " ms" << std::endl;
+          CefDoMessageLoopWork();
         });
-    } else {
+    }
+    else
+    {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay_ms * NSEC_PER_MSEC),
                        dispatch_get_main_queue(), ^{
-            CefDoMessageLoopWork();
-        }); 
+                         CefDoMessageLoopWork();
+                       });
     }
 }

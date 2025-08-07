@@ -50,6 +50,9 @@ public:
     MyRenderHandler(int width, int height, int pixel_density, RenderingCallback rendering_callback, PopupShowCallback popup_show_callback,
                     PopupSizedCallback popup_sized_callback);
 
+    // Method to update dimensions and pixel density
+    void UpdateDimensions(int width, int height, int pixel_density);
+
     RenderingCallback m_rendering_callback;
     PopupShowCallback m_popup_show_callback;
     PopupSizedCallback m_popup_sized_callback;
@@ -57,9 +60,9 @@ public:
     // CefRenderHandler methods
     void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect) override
     {
-        // Define the size of your offscreen render area.
-        // This tells CEF the dimensions at which to render the web content.
-        rect = CefRect(0, 0, m_width, m_height); // Example: 1280x720 pixels [1]
+        // Get the current view dimensions dynamically
+        // This ensures CEF renders at the correct size even after resize
+        rect = CefRect(0, 0, m_width, m_height);
     }
 
     bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info) override {
@@ -141,18 +144,20 @@ class MyClient : public CefClient,
                 public CefFocusHandler
 {
 public:
+
     ImGuiMouseCursor m_imgui_cursor_type = ImGuiMouseCursor_Arrow;
     bool m_closed = false;
     bool m_has_focus = false;
+    CefRefPtr<MyRenderHandler> m_render_handler;
 
     // ... existing members ...
     CefRefPtr<CefBrowser> m_browser; // Your browser instance
 
-    MyClient(CefRefPtr<MyRenderHandler> render_handler) : render_handler_(render_handler) {}
+    MyClient(CefRefPtr<MyRenderHandler> render_handler) : m_render_handler(render_handler) {}
 
     CefRefPtr<CefRenderHandler> GetRenderHandler() override
     {
-        return render_handler_; // [1]
+        return m_render_handler; // [1]
     }
 
     CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
@@ -457,7 +462,6 @@ public:
     }
 
 private:
-    CefRefPtr<MyRenderHandler> render_handler_;
     IMPLEMENT_REFCOUNTING(MyClient);
 };
 
@@ -485,7 +489,7 @@ public:
     CefRefPtr<MyClient> m_client;
 
     MTL::DepthStencilState *m_depth_stencil_state_disabled = nullptr;
-    MTL::Buffer *m_triangle_vertex_buffer = nullptr;
+    //MTL::Buffer *m_triangle_vertex_buffer = nullptr;
     MTL::Buffer *m_popup_triangle_vertex_buffer = nullptr;
 
     MTL::RenderPipelineState *m_render_pipeline = nullptr;
@@ -555,6 +559,23 @@ public:
         return true;
     }
 
+    CefRefPtr<CefBrowser> get_browser()
+    {
+        if (m_client)
+        {
+            return m_client->m_browser;
+        }
+        return nullptr;
+    }
+
+    void update_render_handler_dimensions(int width, int height, int pixel_density)
+    {
+        if (m_client && m_client->m_render_handler)
+        {
+            m_client->m_render_handler->UpdateDimensions(width, height, pixel_density);
+        }
+    }
+
     void request_new_frame()
     {
         if (m_client)
@@ -615,7 +636,7 @@ public:
                                        CefRefPtr<CefCommandLine> command_line) override;
 
     void encode_render_command(MTL::RenderCommandEncoder *render_command_encoder,
-                               MTL::Buffer *projection_buffer);
+                               MTL::Buffer *projection_buffer, MTL::Buffer *triangle_vertex_buffer);
 
       // This is the magic hook provided by CEF, with the correct name.
     void OnScheduleMessagePumpWork(int64_t delay_ms) override ;

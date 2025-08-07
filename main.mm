@@ -48,7 +48,7 @@ int main(int argc, const char * argv[]) {
         [window makeFirstResponder:metalView];
         
         // Configure the window
-        [window setTitle:@"Metal App with IME Support"];
+        [window setTitle:@"Shrome"];
         [window center];
         [window makeKeyAndOrderFront:nil];
         
