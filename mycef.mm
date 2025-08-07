@@ -6,15 +6,14 @@
 #include <QuartzCore/QuartzCore.hpp>
 #include <simd/simd.h>
 #include "mycef.h"
-
+#include <dispatch/dispatch.h>
 #include <iostream>
 
-MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height,uint32_t pixel_density,std::function<void(int64_t)> work_scheduler)
+MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height,uint32_t pixel_density)
     : m_metal_device(metal_device), 
     m_window_width(window_width), 
     m_window_height(window_height),
-    m_pixel_density(pixel_density),
-    m_work_scheduler(work_scheduler)
+    m_pixel_density(pixel_density)
 {
     // Initialize any necessary resources here, such as creating a Metal texture.
     // For example:
@@ -61,6 +60,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                                 int width,
                                 int height)
     {
+        std::cout << "texture ready " << width << ", " << height << std::endl;
         if (type == CefRenderHandler::PaintElementType::PET_VIEW)
         {
             if (m_texture && (m_texture_width != static_cast<uint32_t>(width) || m_texture_height != static_cast<uint32_t>(height)))
@@ -201,7 +201,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
 void MyApp::OnBeforeCommandLineProcessing(const CefString &process_type,
                                           CefRefPtr<CefCommandLine> command_line)
 {
-    std::cout << "OnBeforeCommandLineProcessing called for process type: " << process_type.ToString() << std::endl;
+   // std::cout << "OnBeforeCommandLineProcessing called for process type: " << process_type.ToString() << std::endl;
     // Check if it's the browser process (process_type will be empty for browser process)
     if (process_type.empty())
     {
@@ -391,6 +391,7 @@ void MyApp::encode_render_command(MTL::RenderCommandEncoder *render_command_enco
             render_command_encoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, vertexStart, vertexCount);
         }
     }
+
 }
 
 void MyClient::OnAfterCreated(CefRefPtr<CefBrowser> browser)
@@ -410,4 +411,20 @@ std::string get_macos_cache_dir(const std::string &app_name)
     if (!home)
         return "/tmp/" + app_name; // fallback
     return std::string(home) + "/Library/Caches/" + app_name;
+}
+
+void MyApp::OnScheduleMessagePumpWork(int64_t delay_ms)
+{
+    if (delay_ms <= 0)
+    {
+        dispatch_async(dispatch_get_main_queue(), ^{
+           std::cout << "OnScheduleMessagePumpWork called with delay: " << delay_ms << " ms" << std::endl;
+           CefDoMessageLoopWork();
+        });
+    } else {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay_ms * NSEC_PER_MSEC),
+                       dispatch_get_main_queue(), ^{
+            CefDoMessageLoopWork();
+        }); 
+    }
 }

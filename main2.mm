@@ -57,7 +57,15 @@ int main(int argc, const char * argv[]) {
            
         // Run the application
         [NSApp run];
+
+        for(int i=0;i<10;++i) {
+            CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.01, 1);
+            CefDoMessageLoopWork();
+            [NSThread sleepForTimeInterval:0.05];
+        }
+
+       // CefShutdown();
     }
-    //CefShutdown();
+    CefShutdown();
     return 0;
 }

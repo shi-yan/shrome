@@ -1,5 +1,5 @@
 #import "metal_view.h"
-
+#import <Metal/Metal.h>
 #include "imgui.h"
 #include "imgui_impl_metal.h"
 #include "imgui_impl_osx.h"
@@ -11,93 +11,37 @@
 #include "include/wrapper/cef_library_loader.h"
 #include "include/cef_command_line.h" // Required for CefCommandLine
 #include "mycef.h"
+#include <simd/simd.h>
+
+namespace MTL {
+class RenderCommandEncoder;
+class Buffer;
+}
+
+matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, float near, float far)
+{
+    float sx = 2.0f / (right - left);
+    float sy = 2.0f / (top - bottom);
+    float sz = 2.0f / (near - far);
+    float tx = (left + right) / (left - right);
+    float ty = (bottom + top) / (bottom - top);
+    float tz = (near + far) / (near - far);
+    return (matrix_float4x4){{{sx, 0, 0, 0},
+                              {0, sy, 0, 0},
+                              {0, 0, sz, 0},
+                              {tx, ty, tz, 1}}};
+}
 
 @implementation AppDelegate
-
-void CefRunLoopSourcePerform(void *info)
-{
-    // We retrieve the AppDelegate instance from the 'info' pointer.
-    // We can then safely call Objective-C methods on it.
-    CefDoMessageLoopWork();
-}
-
-// Called when the run loop source is added to a run loop.
-void CefRunLoopSourceSchedule(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
-{
-    // In a real-world scenario, you could use this to register a signal handler
-    // or a mach port. For our purpose, we don't need to do anything here.
-}
-
-// Called when the run loop source is removed from a run loop.
-void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
-{
-    // Perform any necessary cleanup here.
-}
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
 {
     return YES;
 }
 
-- (void)doCefMessageLoopWork
-{
-    // This is the critical call to process all pending CEF events.
-    CefDoMessageLoopWork();
-}
-
-- (void)scheduleCefMessageLoopWork:(int64_t)delay_ms
-{
-    // 1. Cancel any existing timer to fulfill the contract of OnScheduleMessagePumpWork.
-    if (_cefWorkTimer && [_cefWorkTimer isValid])
-    {
-        [_cefWorkTimer invalidate];
-    }
-    _cefWorkTimer = nil;
-
-    // 2. Handle the different delay scenarios.
-    if (delay_ms <= 0)
-    {
-        // If the delay is <= 0, the work should be done immediately.
-        // We signal the run loop source to execute the work on the next iteration.
-        if (_cefRunLoopSource)
-        {
-            CFRunLoopSourceSignal(_cefRunLoopSource);
-        }
-        CFRunLoopWakeUp(CFRunLoopGetMain());
-    }
-    else
-    {
-        // If the delay is > 0, schedule a timer to run the work after the specified delay.
-        // NSTimer will call our doCefMessageLoopWork method on the main thread.
-        _cefWorkTimer = [NSTimer scheduledTimerWithTimeInterval:(double)delay_ms / 1000.0
-                                                         target:self
-                                                       selector:@selector(doCefMessageLoopWork)
-                                                       userInfo:nil
-                                                        repeats:NO];
-    }
-}
-
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
     // ---- 1. Create and Add the CFRunLoopSource ----
-    // We define the callbacks for our run loop source.
-    CFRunLoopSourceContext context = {
-        .version = 0,
-        .info = (__bridge void *)self, // Pass a reference to our AppDelegate
-        .retain = NULL,
-        .release = NULL,
-        .copyDescription = NULL,
-        .equal = NULL,
-        .hash = NULL,
-        .schedule = CefRunLoopSourceSchedule,
-        .cancel = CefRunLoopSourceCancel,
-        .perform = CefRunLoopSourcePerform};
-
-    // Create the run loop source (a Source0, which requires manual signaling).
-    _cefRunLoopSource = CFRunLoopSourceCreate(kCFAllocatorDefault, 0, &context);
-
-    // Add the run loop source to the main run loop in the default mode.
-    CFRunLoopAddSource(CFRunLoopGetMain(), _cefRunLoopSource, kCFRunLoopDefaultMode);
 
     // You must make the very first call to prime the CEF message loop.
     CefDoMessageLoopWork();
@@ -107,25 +51,7 @@ void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification
 {
-    // ---- 4. Cleanup ----
-    // Remove the run loop source from the main run loop.
-    if (_cefRunLoopSource)
-    {
-        CFRunLoopRemoveSource(CFRunLoopGetMain(), _cefRunLoopSource, kCFRunLoopDefaultMode);
-        CFRunLoopSourceInvalidate(_cefRunLoopSource);
-        CFRelease(_cefRunLoopSource);
-        _cefRunLoopSource = NULL;
-    }
 
-    if (_cefWorkTimer && [_cefWorkTimer isValid])
-    {
-        [_cefWorkTimer invalidate];
-    }
-    _cefWorkTimer = nil;
-
-    // Perform any final cleanup for your CEF handler and shutdown.
-    // delete _cefHandler; // Conceptual C++ code
-    CefShutdown();
     NSLog(@"App terminated, CEF shutdown complete.");
 }
 
@@ -143,10 +69,11 @@ void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
     id<MTLCommandQueue> _commandQueue;
     id<MTLRenderPipelineState> _pipelineState;
     NSMutableString *_textBuffer;
+    id<MTLBuffer> projection_buffer;
     BOOL _hasMarkedText;
 }
 
-- (instancetype)initWithFrame:(NSRect)frame device:(id<MTLDevice>)device appDelegate:(AppDelegate *)appDelegate
+- (instancetype)initWithFrame:(NSRect)frame device:(id<MTLDevice>)device
 {
     self = [super initWithFrame:frame device:device];
     if (self)
@@ -157,7 +84,7 @@ void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
         self.paused = NO;
         self.framebufferOnly = NO;
         self.delegate = self;
-        [self setupMetal];
+        [self setupMetalWithFrame:frame];
         [self setupTextInput];
         // Force initial display
         //[self setNeedsDisplay:YES];
@@ -177,30 +104,16 @@ void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
         ImGui_ImplMetal_Init(device);
         ImGui_ImplOSX_Init(self);
 
-        [self setupCEF]; // Initialize CEF
         CGFloat pixelDensity = [self.window backingScaleFactor];
         int normalWinWidth = frame.size.width;
         int normalWinHeight = frame.size.height;
 
-        __weak AppDelegate *weakAppDelegate = appDelegate;
-
-        // The lambda to be passed to the C++ handler.
-        // It captures the weak reference.
-        std::function<void(int64_t)> workScheduler = [weakAppDelegate](int64_t delay_ms)
-        {
-            // It's crucial to get a strong reference inside the lambda before using it.
-            AppDelegate *strongAppDelegate = weakAppDelegate;
-            if (strongAppDelegate)
-            {
-                std::cout << "called scheduleCefMessageLoopWork with delay: " << delay_ms << std::endl;
-                // Now it's safe to call the Objective-C method.
-                [strongAppDelegate scheduleCefMessageLoopWork:delay_ms];
-            }
-        };
-
-        _app = new MyApp((__bridge MTL::Device *)self.device, normalWinWidth, normalWinHeight, pixelDensity, workScheduler);
+        _app = new MyApp((__bridge MTL::Device *)self.device, normalWinWidth, normalWinHeight, pixelDensity);
         _app->init((__bridge MTL::Device *)self.device, MTLPixelFormatBGRA8Unorm, normalWinWidth, normalWinHeight);
-            CefDoMessageLoopWork();
+
+        [self setupCEF]; // Initialize CEF
+
+        // CefDoMessageLoopWork();
     }
     return self;
 }
@@ -220,6 +133,7 @@ void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
     CefSettings settings;
     // Required for windowless (offscreen) rendering. Must be set before CefInitialize. [3, 1]
     settings.windowless_rendering_enabled = true;
+    settings.external_message_pump = true;
     CefString(&settings.root_cache_path) = get_macos_cache_dir("shrome");
 
 #if !defined(CEF_USE_SANDBOX)
@@ -239,7 +153,7 @@ void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
     return 0;
 }
 
-- (void)setupMetal
+- (void)setupMetalWithFrame:(CGRect)frame
 {
     NSLog(@"Setting up Metal...");
 
@@ -326,6 +240,14 @@ void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
     {
         NSLog(@"Pipeline state error: %@", error);
     }
+
+    projection_buffer = [self.device newBufferWithLength:sizeof(matrix_float4x4) options:MTLResourceStorageModeShared];
+    if (!projection_buffer)
+    {
+        NSLog(@"Failed to create projection buffer");
+    }
+    matrix_float4x4 projection_matrix = matrix_ortho(0.0f, (float)frame.size.width, (float)frame.size.height, 0.0f, 1.0f, -1.0f);
+    memcpy(projection_buffer.contents, &projection_matrix, sizeof(matrix_float4x4));
 }
 
 - (void)setupTextInput
@@ -353,6 +275,7 @@ void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
     }
     CefQuitMessageLoop();
     _app.reset();
+
     // Cleanup
     ImGui_ImplMetal_Shutdown();
     ImGui_ImplOSX_Shutdown();
@@ -362,7 +285,7 @@ void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
 // MTKViewDelegate method - called automatically every frame
 - (void)drawInMTKView:(MTKView *)view
 {
-
+    _app->request_new_frame();
     ImGuiIO &io = ImGui::GetIO();
     io.DisplaySize.x = view.bounds.size.width;
     io.DisplaySize.y = view.bounds.size.height;
@@ -380,9 +303,15 @@ void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
         renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.2, 0.3, 0.5, 1.0);
 
         id<MTLRenderCommandEncoder> renderEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
-        [renderEncoder setRenderPipelineState:_pipelineState];
+        //[renderEncoder setRenderPipelineState:_pipelineState];
         // Draw triangle (3 vertices) + coordinate indicators (24 vertices) = 27 total
-        [renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:27];
+        //[renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:27];
+
+        [renderEncoder pushDebugGroup: @"Metal View Rendering"];
+
+        _app->encode_render_command((__bridge MTL::RenderCommandEncoder *) renderEncoder,(__bridge MTL::Buffer *) projection_buffer);
+
+        [renderEncoder popDebugGroup];
 
         // [commandBuffer commit];
 
@@ -455,6 +384,12 @@ void CefRunLoopSourceCancel(void *info, CFRunLoopRef rl, CFRunLoopMode mode)
 {
     NSLog(@"MTKView size changed to: %.0f x %.0f", size.width, size.height);
     // Update any size-dependent resources here (like viewport, projection matrix, etc.)
+
+    if (projection_buffer)
+    {
+        matrix_float4x4 projection_matrix = matrix_ortho(0.0f, (float)size.width, (float)size.height, 0.0f, 1.0f, -1.0f);
+        memcpy(projection_buffer.contents, &projection_matrix, sizeof(matrix_float4x4));
+    }
 }
 
 #pragma mark - Event Handling

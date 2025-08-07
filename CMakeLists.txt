@@ -11,7 +11,7 @@ project(test_cef)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 find_library(COCOA_FRAMEWORK Cocoa)
-find_library(FOUNDATION_FRAMEWORK Foundation)
+#find_library(FOUNDATION_FRAMEWORK Foundation)
 find_library(METAL_FRAMEWORK Metal)
 find_library(METALKIT_FRAMEWORK MetalKit)
 find_library(GAMECONTROLLER_FRAMEWORK GameController)
@@ -97,7 +97,7 @@ set(SHROME_SRCS_MAC
  #simple_handler_mac.mm
   main2.mm
   metal_view.mm
-  mycef.cpp
+  mycef.mm
   )
 set(SHROME_SRCS_WINDOWS
   cefsimple_win.cc
@@ -264,7 +264,7 @@ string(REPLACE "-Werror" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 
   target_link_libraries(${CEF_TARGET} libcef_dll_wrapper ${CEF_STANDARD_LIBS}
   glm::glm 
-  ${COCOA_FRAMEWORK} ${FOUNDATION_FRAMEWORK} ${METAL_FRAMEWORK} ${METALKIT_FRAMEWORK}
+  ${COCOA_FRAMEWORK} ${METAL_FRAMEWORK} ${METALKIT_FRAMEWORK}
   ${GAMECONTROLLER_FRAMEWORK}
   )
   set_target_properties(${CEF_TARGET} PROPERTIES

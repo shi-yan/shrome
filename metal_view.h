@@ -3,13 +3,10 @@
 
 
 @interface AppDelegate : NSObject <NSApplicationDelegate> {
-CFRunLoopSourceRef _cefRunLoopSource;
-NSTimer* _cefWorkTimer;
+
 }
 
-- (void)doCefMessageLoopWork;
 
-- (void)scheduleCefMessageLoopWork:(int64_t)delay_ms;
 @end
 
 
@@ -28,7 +25,7 @@ NSTimer* _cefWorkTimer;
 @property (nonatomic) NSPoint lastMousePosition;
 @property (nonatomic) BOOL followMouse;
 
-- (instancetype)initWithFrame:(NSRect)frame device:(id<MTLDevice>)device appDelegate:(AppDelegate *)appDelegate;
+- (instancetype)initWithFrame:(NSRect)frame device:(id<MTLDevice>)device;
 
 // IME positioning control methods
 - (void)setCursorPosition:(NSPoint)position;

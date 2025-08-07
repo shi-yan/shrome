@@ -108,6 +108,7 @@ public:
         {
             m_rendering_callback(type, dirtyRects, buffer, width, height);
         }
+        std::cout << "on paint called: " << width << ", " << height << std::endl;
     }
 
     // Other CefRenderHandler methods can be left as default or implemented as needed.
@@ -492,7 +493,7 @@ public:
     PopupShowCallback m_popup_show_callback;
     PopupSizedCallback m_popup_sized_callback;
 
-    MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height, uint32_t pixel_density, std::function<void(int64_t)> work_scheduler);
+    MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height, uint32_t pixel_density);
 
     void init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t window_width, uint32_t window_height);
 
@@ -507,6 +508,7 @@ public:
     // CefBrowserProcessHandler methods
     void OnContextInitialized() override
     {
+       // std::cout << "CefApp::OnContextInitialized called" << std::endl;
         CefBrowserSettings browser_settings;
         browser_settings.windowless_frame_rate = 30;
         // Transparent painting is enabled by default in OSR, but can be disabled
@@ -614,17 +616,8 @@ public:
                                MTL::Buffer *projection_buffer);
 
       // This is the magic hook provided by CEF, with the correct name.
-    void OnScheduleMessagePumpWork(int64_t delay_ms) override {
-        // Now we just call the stored lambda with the delay.
-        std::cout << "OnScheduleMessagePumpWork called with delay: " << delay_ms << std::endl;
-        if (m_work_scheduler) {
-            std::cout << "OnScheduleMessagePumpWork called with delay: " << delay_ms << std::endl;
-            m_work_scheduler(delay_ms);
-        }
-    }
-
+    void OnScheduleMessagePumpWork(int64_t delay_ms) override ;
 private:
-    std::function<void(int64_t)> m_work_scheduler;
 
     IMPLEMENT_REFCOUNTING(MyApp);
 };
