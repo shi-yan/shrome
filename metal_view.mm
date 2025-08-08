@@ -73,6 +73,18 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     id<MTLBuffer> projection_buffer;
     id<MTLBuffer> triangle_vertex_buffer;
     BOOL _hasMarkedText;
+    
+    // IME state variables
+    NSString *_markedTextString;
+    NSAttributedString *_markedTextAttributed;
+    NSRange _markedRange;
+    NSRange _selectedRange;
+    std::vector<CefCompositionUnderline> _underlines;
+    BOOL _handlingKeyDown;
+    BOOL _oldHasMarkedText;
+    std::string _textToBeInserted;
+    CefRange _setMarkedTextReplacementRange;
+    BOOL _unmarkTextCalled;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame device:(id<MTLDevice>)device
@@ -445,43 +457,35 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 
 - (void)keyDown:(NSEvent *)event
 {
-    // Handle special keys for IME positioning control
-    //  NSString *characters = [event charactersIgnoringModifiers];
-    /*
-        if ([characters isEqualToString:@"t"] || [characters isEqualToString:@"T"])
-        {
-            [self toggleMouseFollowing];
-            return;
-        }
+    if ([event type] != NSEventTypeFlagsChanged) {
+        [self handleKeyEventBeforeTextInputClient:event];
+        
+        // Let the input method system handle this
+        [self interpretKeyEvents:@[ event ]];
+        
+        CefKeyEvent keyEvent;
+        [self getKeyEvent:keyEvent forEvent:event];
+        
+        [self handleKeyEventAfterTextInputClient:keyEvent];
+    }
+}
 
-        if ([characters isEqualToString:@"c"] || [characters isEqualToString:@"C"])
-        {
-            // Center the cursor
-            NSPoint center = NSMakePoint(self.bounds.size.width / 2, self.bounds.size.height / 2);
-            [self setCursorPosition:center];
-            return;
-        }
+- (void)keyUp:(NSEvent *)event
+{
+    CefKeyEvent keyEvent;
+    [self getKeyEvent:keyEvent forEvent:event];
+    keyEvent.type = KEYEVENT_KEYUP;
+    
+    _app->inject_key_event(keyEvent);
+}
 
-        if ([characters isEqualToString:@"r"] || [characters isEqualToString:@"R"])
-        {
-            // Random position
-            NSPoint random = NSMakePoint(
-                arc4random_uniform((uint32_t)self.bounds.size.width),
-                arc4random_uniform((uint32_t)self.bounds.size.height));
-            [self setCursorPosition:random];
-            return;
-        }
-
-        if ([characters isEqualToString:@"d"] || [characters isEqualToString:@"D"])
-        {
-            // Force redraw to show coordinate indicators
-            [self setNeedsDisplay:YES];
-            NSLog(@"Force redraw triggered - coordinate indicators should be visible now");
-            return;
-        }
-    */
-    // Let the input method system handle this
-    [self interpretKeyEvents:@[ event ]];
+- (void)flagsChanged:(NSEvent *)event
+{
+    if ([self isKeyUpEvent:event]) {
+        [self keyUp:event];
+    } else {
+        [self keyDown:event];
+    }
 }
 
 - (void)mouseDown:(NSEvent *)event
@@ -612,6 +616,195 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     }
 
     return cefModifiers;
+}
+
+// Helper method to convert NSEvent to CefKeyEvent
+- (void)getKeyEvent:(CefKeyEvent&)keyEvent forEvent:(NSEvent*)event
+{
+    if ([event type] == NSEventTypeKeyDown || [event type] == NSEventTypeKeyUp) {
+        NSString* s = [event characters];
+        if ([s length] > 0) {
+            keyEvent.character = [s characterAtIndex:0];
+        }
+
+        s = [event charactersIgnoringModifiers];
+        if ([s length] > 0) {
+            keyEvent.unmodified_character = [s characterAtIndex:0];
+        }
+    }
+
+    if ([event type] == NSEventTypeFlagsChanged) {
+        keyEvent.character = 0;
+        keyEvent.unmodified_character = 0;
+    }
+
+    keyEvent.native_key_code = [event keyCode];
+    keyEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+}
+
+// Helper method to check if it's a key up event
+- (BOOL)isKeyUpEvent:(NSEvent*)event
+{
+    if ([event type] != NSEventTypeFlagsChanged) {
+        return [event type] == NSEventTypeKeyUp;
+    }
+
+    // Check for modifier key releases
+    switch ([event keyCode]) {
+        case 54:  // Right Command
+        case 55:  // Left Command
+            return ([event modifierFlags] & NSEventModifierFlagCommand) == 0;
+
+        case 57:  // Capslock
+            return ([event modifierFlags] & NSEventModifierFlagCapsLock) == 0;
+
+        case 56:  // Left Shift
+        case 60:  // Right Shift
+            return ([event modifierFlags] & NSEventModifierFlagShift) == 0;
+
+        case 58:  // Left Alt
+        case 61:  // Right Alt
+            return ([event modifierFlags] & NSEventModifierFlagOption) == 0;
+
+        case 59:  // Left Ctrl
+        case 62:  // Right Ctrl
+            return ([event modifierFlags] & NSEventModifierFlagControl) == 0;
+
+        case 63:  // Function
+            return ([event modifierFlags] & NSEventModifierFlagFunction) == 0;
+    }
+    return false;
+}
+
+// Helper method to check if it's a keypad event
+- (BOOL)isKeyPadEvent:(NSEvent*)event
+{
+    if ([event modifierFlags] & NSEventModifierFlagNumericPad) {
+        return true;
+    }
+
+    switch ([event keyCode]) {
+        case 71:  // Clear
+        case 81:  // =
+        case 75:  // /
+        case 67:  // *
+        case 78:  // -
+        case 69:  // +
+        case 76:  // Enter
+        case 65:  // .
+        case 82:  // 0
+        case 83:  // 1
+        case 84:  // 2
+        case 85:  // 3
+        case 86:  // 4
+        case 87:  // 5
+        case 88:  // 6
+        case 89:  // 7
+        case 91:  // 8
+        case 92:  // 9
+            return true;
+    }
+
+    return false;
+}
+
+// IME helper methods
+- (void)handleKeyEventBeforeTextInputClient:(NSEvent*)keyEvent
+{
+    _oldHasMarkedText = _hasMarkedText;
+    _handlingKeyDown = YES;
+    
+    // Clear IME state variables
+    _textToBeInserted.clear();
+    _markedTextString = nil;
+    _markedTextAttributed = nil;
+    _underlines.clear();
+    _setMarkedTextReplacementRange = CefRange::InvalidRange();
+    _unmarkTextCalled = NO;
+}
+
+- (void)handleKeyEventAfterTextInputClient:(CefKeyEvent)keyEvent
+{
+    _handlingKeyDown = NO;
+    
+    // Send keypress and/or composition related events
+    if (!_hasMarkedText && !_oldHasMarkedText && _textToBeInserted.length() <= 1) {
+        keyEvent.type = KEYEVENT_KEYDOWN;
+        _app->inject_key_event(keyEvent);
+        
+        // Don't send a CHAR event for non-char keys like arrows, function keys and clear
+        if (keyEvent.modifiers & (EVENTFLAG_IS_KEY_PAD)) {
+            if (keyEvent.native_key_code == 71) {
+                return;
+            }
+        }
+        
+        keyEvent.type = KEYEVENT_CHAR;
+        _app->inject_key_event(keyEvent);
+    }
+    
+    // If the text to be inserted contains multiple characters then send the text to the browser
+    BOOL textInserted = NO;
+    if (_textToBeInserted.length() > ((_hasMarkedText || _oldHasMarkedText) ? 0u : 1u)) {
+        _app->inject_ime_commit_text(_textToBeInserted, CefRange::InvalidRange(), 0);
+        _textToBeInserted.clear();
+    }
+    
+    // Update or cancel the composition
+    if (_hasMarkedText && _markedTextString.length) {
+        // Update the composition by sending marked text to the browser
+        _app->inject_ime_set_composition([_markedTextString UTF8String], _underlines, 
+                                        _setMarkedTextReplacementRange,
+                                        CefRange(static_cast<uint32_t>(_selectedRange.location),
+                                                static_cast<uint32_t>(NSMaxRange(_selectedRange))));
+    } else if (_oldHasMarkedText && !_hasMarkedText && !textInserted) {
+        // Complete or cancel the composition
+        if (_unmarkTextCalled) {
+            _app->inject_ime_finish_composing_text(false);
+        } else {
+            _app->inject_ime_cancel_composition();
+        }
+    }
+    
+    _setMarkedTextReplacementRange = CefRange::InvalidRange();
+}
+
+// Helper method to extract underlines from attributed string
+- (void)extractUnderlines:(NSAttributedString*)string
+{
+    _underlines.clear();
+    
+    int length = static_cast<int>([[string string] length]);
+    int i = 0;
+    while (i < length) {
+        NSRange range;
+        NSDictionary* attrs = [string attributesAtIndex:i
+                                  longestEffectiveRange:&range
+                                                inRange:NSMakeRange(i, length - i)];
+        NSNumber* style = [attrs objectForKey:NSUnderlineStyleAttributeName];
+        if (style) {
+            cef_color_t color = 0xFF000000; // Black
+            if (NSColor* colorAttr = [attrs objectForKey:NSUnderlineColorAttributeName]) {
+                CGFloat r, g, b, a;
+                [colorAttr getRed:&r green:&g blue:&b alpha:&a];
+                color = (static_cast<int>(lroundf(255.0f * a)) << 24) |
+                        (static_cast<int>(lroundf(255.0f * r)) << 16) |
+                        (static_cast<int>(lroundf(255.0f * g)) << 8) |
+                        (static_cast<int>(lroundf(255.0f * b)));
+            }
+            
+            cef_composition_underline_t line = {
+                sizeof(cef_composition_underline_t),
+                {static_cast<uint32_t>(range.location),
+                 static_cast<uint32_t>(NSMaxRange(range))},
+                color,
+                0,
+                [style intValue] > 1
+            };
+            _underlines.push_back(line);
+        }
+        i = static_cast<int>(range.location + range.length);
+    }
 }
 
 - (void)mouseMoved:(NSEvent *)event
@@ -774,6 +967,15 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     [_textBuffer appendString:text];
     self.inputText = [_textBuffer copy];
 
+    // If we are handling a key down event then ImeCommitText() will be called from the keyEvent: method
+    if (_handlingKeyDown) {
+        _textToBeInserted.append([text UTF8String]);
+    } else {
+        CefRange range = {static_cast<uint32_t>(replacementRange.location),
+                          static_cast<uint32_t>(NSMaxRange(replacementRange))};
+        _app->inject_ime_commit_text([text UTF8String], range, 0);
+    }
+
     [self setNeedsDisplay:YES];
 }
 
@@ -787,6 +989,38 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     _markedRange = NSMakeRange([_textBuffer length], [markedText.string length]);
     _selectedRange = selectedRange;
     _hasMarkedText = [markedText.string length] > 0;
+    _markedTextString = markedText.string;
+    _markedTextAttributed = markedText;
+
+    // Extract underlines if it's an attributed string
+    if ([string isKindOfClass:[NSAttributedString class]]) {
+        [self extractUnderlines:(NSAttributedString*)string];
+    } else {
+        // Use a thin black underline by default
+        _underlines.clear();
+        cef_composition_underline_t line = {
+            sizeof(cef_composition_underline_t), 
+            {0, static_cast<uint32_t>([markedText.string length])}, 
+            0xFF000000, // Black
+            0, 
+            false
+        };
+        _underlines.push_back(line);
+    }
+
+    // If we are handling a key down event then ImeSetComposition() will be called from the keyEvent: method
+    if (_handlingKeyDown) {
+        _setMarkedTextReplacementRange = CefRange(static_cast<uint32_t>(replacementRange.location),
+                                                  static_cast<uint32_t>(NSMaxRange(replacementRange)));
+    } else {
+        CefRange replacement_range(static_cast<uint32_t>(replacementRange.location),
+                                 static_cast<uint32_t>(NSMaxRange(replacementRange)));
+        CefRange selection_range(static_cast<uint32_t>(selectedRange.location),
+                               static_cast<uint32_t>(NSMaxRange(selectedRange)));
+
+        _app->inject_ime_set_composition([_markedTextString UTF8String], _underlines,
+                                        replacement_range, selection_range);
+    }
 
     [self setNeedsDisplay:YES];
 }
@@ -795,15 +1029,25 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 {
     NSLog(@"Unmark text");
 
-    if (_hasMarkedText && _markedText)
+    if (_hasMarkedText && _markedTextString)
     {
-        [_textBuffer appendString:_markedText.string];
+        [_textBuffer appendString:_markedTextString];
         self.inputText = [_textBuffer copy];
     }
 
     self.markedText = nil;
+    _markedTextString = nil;
+    _markedTextAttributed = nil;
     _markedRange = NSMakeRange(NSNotFound, 0);
     _hasMarkedText = NO;
+    _underlines.clear();
+
+    // If we are handling a key down event then ImeFinishComposingText() will be called from the keyEvent: method
+    if (!_handlingKeyDown) {
+        _app->inject_ime_finish_composing_text(false);
+    } else {
+        _unmarkTextCalled = YES;
+    }
 
     [self setNeedsDisplay:YES];
 }
@@ -831,7 +1075,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         *actualRange = range;
     }
 
-    NSString *fullText = _hasMarkedText ? [_textBuffer stringByAppendingString:_markedText.string] : _textBuffer;
+    NSString *fullText = _hasMarkedText ? [_textBuffer stringByAppendingString:_markedTextString] : _textBuffer;
 
     if (range.location >= [fullText length])
     {

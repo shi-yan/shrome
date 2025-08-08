@@ -287,6 +287,11 @@ public:
         }
     }
 
+    CefRefPtr<CefBrowser> get_browser()
+    {
+        return m_browser;
+    }
+
     void inject_mouse_motion(const CefMouseEvent &mouse_event)
     {
         if (m_browser && m_browser->IsValid())
@@ -629,6 +634,41 @@ public:
         if (m_client)
         {
             m_client->inject_key_event(event);
+        }
+    }
+
+    void inject_ime_commit_text(const std::string &text, const CefRange &range, int relative_cursor_pos)
+    {
+        if (m_client && m_client->get_browser() && m_client->get_browser()->IsValid())
+        {
+            m_client->get_browser()->GetHost()->ImeCommitText(text, range, relative_cursor_pos);
+        }
+    }
+
+    void inject_ime_set_composition(const std::string &text, 
+                                   const std::vector<CefCompositionUnderline> &underlines,
+                                   const CefRange &replacement_range, 
+                                   const CefRange &selection_range)
+    {
+        if (m_client && m_client->get_browser() && m_client->get_browser()->IsValid())
+        {
+            m_client->get_browser()->GetHost()->ImeSetComposition(text, underlines, replacement_range, selection_range);
+        }
+    }
+
+    void inject_ime_finish_composing_text(bool keep_selection)
+    {
+        if (m_client && m_client->get_browser() && m_client->get_browser()->IsValid())
+        {
+            m_client->get_browser()->GetHost()->ImeFinishComposingText(keep_selection);
+        }
+    }
+
+    void inject_ime_cancel_composition()
+    {
+        if (m_client && m_client->get_browser() && m_client->get_browser()->IsValid())
+        {
+            m_client->get_browser()->GetHost()->ImeCancelComposition();
         }
     }
 
