@@ -4,6 +4,7 @@
 {
 }
 
+
 @end
 
 @interface MainMetalView : MTKView <NSTextInputClient, MTKViewDelegate>
@@ -12,7 +13,6 @@
 @property(nonatomic, strong) NSAttributedString *markedText;
 @property(nonatomic) NSRange markedRange;
 @property(nonatomic) NSRange selectedRange;
-
 // IME positioning properties
 @property(nonatomic) NSPoint textCursorPosition;
 @property(nonatomic) NSPoint lastMousePosition;
