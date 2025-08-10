@@ -179,6 +179,10 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     return 0;
 }
 
+- (void)doCommandBySelector:(SEL)selector {
+    // Swallow all IME commands, let your own UI handle them
+}
+
 - (void)setupMetalWithFrame:(CGRect)frame
 {
     NSLog(@"Setting up Metal...");
