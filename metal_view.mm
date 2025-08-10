@@ -324,6 +324,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 // MTKViewDelegate method - called automatically every frame
 - (void)drawInMTKView:(MTKView *)view
 {
+    ImGui::SetMouseCursor(_app->get_cursor_type());
     // Process CEF message loop work
     CefDoMessageLoopWork();
 
@@ -515,7 +516,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     self.textCursorPosition = locationInView;
     self.lastMousePosition = locationInView;
 
-    NSLog(@"Text cursor moved to: (%.1f, %.1f)", locationInView.x, locationInView.y);
+    //NSLog(@"Text cursor moved to: (%.1f, %.1f)", locationInView.x, locationInView.y);
     [self setNeedsDisplay:YES];
 
     // Convert to CEF mouse event and inject
@@ -592,13 +593,13 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
     mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
 
-    // Convert scroll delta to CEF format
-    // CEF expects delta in lines, but NSEvent provides pixels
-    // We'll convert approximately (1 line = ~40 pixels)
-    int deltaX = static_cast<int>([event scrollingDeltaX] / 40.0);
-    int deltaY = static_cast<int>([event scrollingDeltaY] / 40.0);
+    int deltaX = static_cast<int>([event scrollingDeltaX]);
+    int deltaY = static_cast<int>([event scrollingDeltaY]);
 
     _app->inject_mouse_wheel(mouseEvent, deltaX, deltaY);
+
+    //NSLog(@"mouse scroll at (%.1f, %.1f) with delta (%d, %d)  (%f, %f)",
+    //      locationInView.x, locationInView.y, deltaX, deltaY, [event scrollingDeltaX], [event scrollingDeltaY]);
 }
 
 // Helper method to convert AppKit modifier flags to CEF modifier flags
@@ -1205,7 +1206,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         *actualRange = range;
     }
 
-    NSLog(@"IME window positioned at: (%.1f, %.1f) in screen coordinates", screenRect.origin.x, screenRect.origin.y);
+   // NSLog(@"IME window positioned at: (%.1f, %.1f) in screen coordinates", screenRect.origin.x, screenRect.origin.y);
 
     return screenRect;
 }

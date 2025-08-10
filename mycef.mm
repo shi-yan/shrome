@@ -96,7 +96,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 {
                     size_t bitmap_stride = width * 4; // Assuming 4 bytes per pixel (BGRA format)
 
-                    std::cout << "full texture update width " << width << ", height " << height << std::endl;
+                    //std::cout << "full texture update width " << width << ", height " << height << std::endl;
                     //  Replace the region with the new data
                     m_texture->replaceRegion(MTL::Region(0, 0, 0, width, height, 1), 0, buffer, bitmap_stride);
                 }
@@ -274,7 +274,7 @@ void MyRenderHandler::UpdateDimensions(int width, int height, int pixel_density)
     m_width = width;
     m_height = height;
     m_pixel_density = pixel_density;
-    std::cout << "MyRenderHandler updated dimensions: " << m_width << ", " << m_height << ", " << m_pixel_density << std::endl;
+    //std::cout << "MyRenderHandler updated dimensions: " << m_width << ", " << m_height << ", " << m_pixel_density << std::endl;
 }
 
 void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t window_width, uint32_t window_height)
