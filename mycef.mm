@@ -54,11 +54,50 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
         }
     };
 
-    m_on_texture_ready = [this](CefRenderHandler::PaintElementType type,
-                                const CefRenderHandler::RectList &dirtyRects,
-                                const void *buffer,
-                                int width,
-                                int height)
+    m_on_accelerated_texture_ready = [this](CefRenderHandler::PaintElementType type,
+                                            const CefRenderHandler::RectList &dirtyRects,
+                                            IOSurfaceRef io_surface)
+    {
+        size_t width = IOSurfaceGetWidth(io_surface);
+        size_t height = IOSurfaceGetHeight(io_surface);
+
+        if (type == CefRenderHandler::PaintElementType::PET_VIEW)
+        {
+            if (m_texture && ((m_texture_width != static_cast<uint32_t>(width) || m_texture_height != static_cast<uint32_t>(height)) ||
+                              m_texture->iosurface() != io_surface))
+            {
+                m_texture->release();
+                m_texture = nullptr;
+            }
+
+            if (!m_texture)
+            {
+                m_window_width = width;
+                m_window_height = height;
+                m_texture_width = m_window_width;
+                m_texture_height = m_window_height;
+
+                MTL::TextureDescriptor *descriptor = MTL::TextureDescriptor::texture2DDescriptor(
+                    MTL::PixelFormatBGRA8Unorm,
+                    width,
+                    height,
+                    false // mipmapped
+                );
+
+                // Set the usage and storage mode.
+                descriptor->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
+                descriptor->setStorageMode(MTL::StorageModeManaged);
+
+                // The key function: Create the texture directly from the IOSurface.
+                // This creates a Metal texture that aliases the memory of the IOSurface.
+                m_texture = m_metal_device->newTexture(descriptor, io_surface, 0);
+
+                //descriptor->release(); // no need to release
+            }
+        }
+    };
+
+    m_on_texture_ready = [this](CefRenderHandler::PaintElementType type, const CefRenderHandler::RectList &dirtyRects, const void *buffer, int width, int height)
     {
         // std::cout << "texture ready " << width << ", " << height << std::endl;
         if (type == CefRenderHandler::PaintElementType::PET_VIEW)
@@ -96,8 +135,8 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 {
                     size_t bitmap_stride = width * 4; // Assuming 4 bytes per pixel (BGRA format)
 
-                    //std::cout << "full texture update width " << width << ", height " << height << std::endl;
-                    //  Replace the region with the new data
+                    // std::cout << "full texture update width " << width << ", height " << height << std::endl;
+                    //   Replace the region with the new data
                     m_texture->replaceRegion(MTL::Region(0, 0, 0, width, height, 1), 0, buffer, bitmap_stride);
                 }
                 else
@@ -198,8 +237,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
     };
 }
 
-void MyApp::OnBeforeCommandLineProcessing(const CefString &process_type,
-                                          CefRefPtr<CefCommandLine> command_line)
+void MyApp::OnBeforeCommandLineProcessing(const CefString &process_type, CefRefPtr<CefCommandLine> command_line)
 {
     // std::cout << "OnBeforeCommandLineProcessing called for process type: " << process_type.ToString() << std::endl;
     // Check if it's the browser process (process_type will be empty for browser process)
@@ -259,10 +297,15 @@ MyApp::~MyApp()
     }
 }
 
-MyRenderHandler::MyRenderHandler(int width, int height, int pixel_density, RenderingCallback rendering_callback, PopupShowCallback popup_show_callback,
+MyRenderHandler::MyRenderHandler(bool accelerated_rendering, int width, int height, int pixel_density,
+                                 RenderingCallback rendering_callback,
+                                 AcceleratedRenderingCallback accelerated_rendering_callback,
+                                 PopupShowCallback popup_show_callback,
                                  PopupSizedCallback popup_sized_callback)
-    : m_width(width), m_height(height), m_pixel_density(pixel_density),
+    : m_accelerated_rendering(accelerated_rendering),
+      m_width(width), m_height(height), m_pixel_density(pixel_density),
       m_rendering_callback(rendering_callback),
+      m_accelerated_rendering_callback(accelerated_rendering_callback),
       m_popup_show_callback(popup_show_callback),
       m_popup_sized_callback(popup_sized_callback)
 {
@@ -274,7 +317,7 @@ void MyRenderHandler::UpdateDimensions(int width, int height, int pixel_density)
     m_width = width;
     m_height = height;
     m_pixel_density = pixel_density;
-    //std::cout << "MyRenderHandler updated dimensions: " << m_width << ", " << m_height << ", " << m_pixel_density << std::endl;
+    // std::cout << "MyRenderHandler updated dimensions: " << m_width << ", " << m_height << ", " << m_pixel_density << std::endl;
 }
 
 void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t window_width, uint32_t window_height)

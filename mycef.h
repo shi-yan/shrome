@@ -1,7 +1,6 @@
 #ifndef MYCEF_H
 #define MYCEF_H
 
-
 #include "include/cef_app.h"
 #include "include/cef_client.h"
 #include "include/cef_render_handler.h"
@@ -9,7 +8,7 @@
 #include "include/wrapper/cef_library_loader.h"
 #include "include/cef_focus_handler.h"
 #include "include/cef_command_line.h" // Required for CefCommandLine
-
+#include <IOSurface/IOSurface.h>
 #include <iostream>
 #include <vector>
 #include <functional>
@@ -19,7 +18,8 @@
 
 //--off-screen-rendering-enabled
 
-namespace MTL {
+namespace MTL
+{
     class Device;
     class Texture;
     class Buffer;
@@ -36,6 +36,10 @@ using RenderingCallback = std::function<void(CefRenderHandler::PaintElementType 
                                              int width,
                                              int height)>;
 
+using AcceleratedRenderingCallback = std::function<void(CefRenderHandler::PaintElementType type,
+                                                        const CefRenderHandler::RectList &dirtyRects,
+                                                        IOSurfaceRef io_surface)>;
+
 using PopupShowCallback = std::function<void(bool show)>;
 
 using PopupSizedCallback = std::function<void(const CefRect &rect)>;
@@ -44,16 +48,22 @@ using PopupSizedCallback = std::function<void(const CefRect &rect)>;
 class MyRenderHandler : public CefRenderHandler
 {
 public:
+    bool m_accelerated_rendering = false;
     int m_width = 0;
     int m_height = 0;
     int m_pixel_density = 1;
-    MyRenderHandler(int width, int height, int pixel_density, RenderingCallback rendering_callback, PopupShowCallback popup_show_callback,
+
+    MyRenderHandler(bool accelerated_rendering, int width, int height, int pixel_density,
+                    RenderingCallback rendering_callback,
+                    AcceleratedRenderingCallback accelerated_rendering_callback,
+                    PopupShowCallback popup_show_callback,
                     PopupSizedCallback popup_sized_callback);
 
     // Method to update dimensions and pixel density
     void UpdateDimensions(int width, int height, int pixel_density);
 
     RenderingCallback m_rendering_callback;
+    AcceleratedRenderingCallback m_accelerated_rendering_callback;
     PopupShowCallback m_popup_show_callback;
     PopupSizedCallback m_popup_sized_callback;
 
@@ -65,16 +75,33 @@ public:
         rect = CefRect(0, 0, m_width, m_height);
     }
 
-    bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info) override {
- 
+    bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo &screen_info) override
+    {
+
         float dpi_scale_factor = m_pixel_density;
 
         screen_info.device_scale_factor = dpi_scale_factor;
 
-        screen_info.rect = CefRect(0, 0, m_width, m_height); // Full screen in DIPs
+        screen_info.rect = CefRect(0, 0, m_width, m_height);           // Full screen in DIPs
         screen_info.available_rect = CefRect(0, 0, m_width, m_height); // Usable screen in DIPs (e.g., excluding taskbars)
-//std::cout << "get screen info: " << m_width << ", " << m_height << ", " << dpi_scale_factor << std::endl;
-        return true; // Indicate that you provided the information
+                                                                       // std::cout << "get screen info: " << m_width << ", " << m_height << ", " << dpi_scale_factor << std::endl;
+        return true;                                                   // Indicate that you provided the information
+    }
+
+    void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
+                            CefRenderHandler::PaintElementType type,
+                            const CefRenderHandler::RectList &dirtyRects,
+                            const CefAcceleratedPaintInfo &info) override
+    {
+        // Handle accelerated paint events here if needed
+        // For now, we can ignore this if not using accelerated painting
+
+        IOSurfaceRef io_surface = (IOSurfaceRef)info.shared_texture_io_surface;
+
+        if (m_accelerated_rendering && m_accelerated_rendering_callback)
+        {
+            m_accelerated_rendering_callback(type, dirtyRects, io_surface);
+        }
     }
 
     void OnPaint(CefRefPtr<CefBrowser> browser,
@@ -107,11 +134,11 @@ public:
         // For simplicity, we're just printing a message here.
         // Example: memcpy(my_texture_buffer, buffer, width * height * 4); [1]
 
-        if (m_rendering_callback)
+        if (!m_accelerated_rendering && m_rendering_callback)
         {
             m_rendering_callback(type, dirtyRects, buffer, width, height);
         }
-        //std::cout << "on paint called: " << width << ", " << height << std::endl;
+        // std::cout << "on paint called: " << width << ", " << height << std::endl;
     }
 
     // Other CefRenderHandler methods can be left as default or implemented as needed.
@@ -141,10 +168,9 @@ class MyClient : public CefClient,
                  public CefDisplayHandler,
                  public CefContextMenuHandler,
                  public CefKeyboardHandler,
-                public CefFocusHandler
+                 public CefFocusHandler
 {
 public:
-
     ImGuiMouseCursor m_imgui_cursor_type = ImGuiMouseCursor_Arrow;
     bool m_closed = false;
     bool m_has_focus = false;
@@ -177,11 +203,13 @@ public:
         return this; // Return a reference to yourself
     }
 
-    void OnGotFocus(CefRefPtr<CefBrowser> browser) override {
+    void OnGotFocus(CefRefPtr<CefBrowser> browser) override
+    {
         m_has_focus = true;
     }
 
-    void OnTakeFocus(CefRefPtr<CefBrowser> browser, bool next) override {
+    void OnTakeFocus(CefRefPtr<CefBrowser> browser, bool next) override
+    {
         m_has_focus = false;
     }
 
@@ -196,7 +224,7 @@ public:
                   << ", VK=" << event.windows_key_code
                   << ", NK=" << event.native_key_code
                   << ", Char=" << event.character
-                  << ", Modifiers=" << event.modifiers 
+                  << ", Modifiers=" << event.modifiers
                   << ", unmodified_char " << event.unmodified_character
                   << ", is_system_key " << event.is_system_key
                   << ", focus_on_editable_field " << event.focus_on_editable_field
@@ -211,11 +239,11 @@ public:
     {
         // This is called AFTER the browser processes the key event.
         // Return true if you handled it and CEF should not do default processing.
-         std::cout << "OnKeyEvent: Type=" << event.type
+        std::cout << "OnKeyEvent: Type=" << event.type
                   << ", VK=" << event.windows_key_code
                   << ", NK=" << event.native_key_code
                   << ", Char=" << event.character
-                  << ", Modifiers=" << event.modifiers 
+                  << ", Modifiers=" << event.modifiers
                   << ", unmodified_char " << event.unmodified_character
                   << ", is_system_key " << event.is_system_key
                   << ", focus_on_editable_field " << event.focus_on_editable_field
@@ -265,14 +293,13 @@ public:
         std::cout << "browser closed ====== " << std::endl;
     }
 
-
     void request_new_frame()
     {
         if (m_browser && m_browser->IsValid())
         {
             if (m_browser->GetHost()->IsWindowRenderingDisabled())
             {
-                //std::cout << "render frame" << std::endl;
+                // std::cout << "render frame" << std::endl;
                 m_browser->GetHost()->SendExternalBeginFrame();
             }
         }
@@ -494,12 +521,13 @@ public:
     CefRefPtr<MyClient> m_client;
 
     MTL::DepthStencilState *m_depth_stencil_state_disabled = nullptr;
-    //MTL::Buffer *m_triangle_vertex_buffer = nullptr;
+    // MTL::Buffer *m_triangle_vertex_buffer = nullptr;
     MTL::Buffer *m_popup_triangle_vertex_buffer = nullptr;
 
     MTL::RenderPipelineState *m_render_pipeline = nullptr;
 
     RenderingCallback m_on_texture_ready;
+    AcceleratedRenderingCallback m_on_accelerated_texture_ready;
     PopupShowCallback m_popup_show_callback;
     PopupSizedCallback m_popup_sized_callback;
 
@@ -518,9 +546,9 @@ public:
     // CefBrowserProcessHandler methods
     void OnContextInitialized() override
     {
-       // std::cout << "CefApp::OnContextInitialized called" << std::endl;
+        // std::cout << "CefApp::OnContextInitialized called" << std::endl;
         CefBrowserSettings browser_settings;
-        browser_settings.windowless_frame_rate = 30;
+        browser_settings.windowless_frame_rate = 60;
         // Transparent painting is enabled by default in OSR, but can be disabled
         // by setting background_color to an opaque value. [3]
         // browser_settings.background_color = 0xFFFFFFFF; // Opaque white background
@@ -530,8 +558,15 @@ public:
         // The 'parent' handle can be nullptr if not strictly necessary for dialog parenting or monitor info. [3, 4]
         window_info.SetAsWindowless(nullptr); // [5, 1]
         window_info.external_begin_frame_enabled = true;
+        window_info.shared_texture_enabled = true; // Enable shared textures for Metal
 
-        CefRefPtr<MyRenderHandler> render_handler = new MyRenderHandler(m_window_width, m_window_height, m_pixel_density, m_on_texture_ready, m_popup_show_callback, m_popup_sized_callback);
+        CefRefPtr<MyRenderHandler> render_handler = new MyRenderHandler( window_info.shared_texture_enabled,
+            m_window_width, 
+            m_window_height, 
+            m_pixel_density, 
+            m_on_texture_ready, 
+            m_on_accelerated_texture_ready,
+            m_popup_show_callback, m_popup_sized_callback);
         m_client = new MyClient(render_handler);
 
         // Create the offscreen browser
@@ -547,7 +582,8 @@ public:
         }
     }
 
-    bool has_focus() {
+    bool has_focus()
+    {
         if (m_client)
         {
             return m_client->m_has_focus;
@@ -585,7 +621,7 @@ public:
     {
         if (m_client)
         {
-            //std::cout << "request new frame" << std::endl;
+            // std::cout << "request new frame" << std::endl;
             m_client->request_new_frame();
         }
     }
@@ -645,10 +681,10 @@ public:
         }
     }
 
-    void inject_ime_set_composition(const std::string &text, 
-                                   const std::vector<CefCompositionUnderline> &underlines,
-                                   const CefRange &replacement_range, 
-                                   const CefRange &selection_range)
+    void inject_ime_set_composition(const std::string &text,
+                                    const std::vector<CefCompositionUnderline> &underlines,
+                                    const CefRange &replacement_range,
+                                    const CefRange &selection_range)
     {
         if (m_client && m_client->get_browser() && m_client->get_browser()->IsValid())
         {
@@ -678,10 +714,10 @@ public:
     void encode_render_command(MTL::RenderCommandEncoder *render_command_encoder,
                                MTL::Buffer *projection_buffer, MTL::Buffer *triangle_vertex_buffer);
 
-      // This is the magic hook provided by CEF, with the correct name.
-    void OnScheduleMessagePumpWork(int64_t delay_ms) override ;
-private:
+    // This is the magic hook provided by CEF, with the correct name.
+    void OnScheduleMessagePumpWork(int64_t delay_ms) override;
 
+private:
     IMPLEMENT_REFCOUNTING(MyApp);
 };
 
