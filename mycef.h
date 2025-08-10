@@ -507,7 +507,7 @@ public:
     bool m_should_show_popup = false;
     CefRect m_popup_pos;
     MTL::Buffer *m_popup_offset_buffer = nullptr;
-    MTL::Buffer *m_zero_offset_buffer = nullptr;
+    MTL::Buffer *m_triangle_vertex_buffer = nullptr;
     MTL::Texture *m_popup_texture = nullptr;
 
     uint32_t m_texture_width = 0;
@@ -711,8 +711,7 @@ public:
     void OnBeforeCommandLineProcessing(const CefString &process_type,
                                        CefRefPtr<CefCommandLine> command_line) override;
 
-    void encode_render_command(MTL::RenderCommandEncoder *render_command_encoder,
-                               MTL::Buffer *projection_buffer, MTL::Buffer *triangle_vertex_buffer);
+    void encode_render_command(MTL::RenderCommandEncoder *render_command_encoder);
 
     // This is the magic hook provided by CEF, with the correct name.
     void OnScheduleMessagePumpWork(int64_t delay_ms) override;

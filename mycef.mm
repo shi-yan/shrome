@@ -285,11 +285,13 @@ MyApp::~MyApp()
         m_popup_texture->release();
         m_popup_texture = nullptr;
     }
-    if (m_zero_offset_buffer)
+
+    if (m_triangle_vertex_buffer)
     {
-        m_zero_offset_buffer->release();
-        m_zero_offset_buffer = nullptr;
+        m_triangle_vertex_buffer->release();
+        m_triangle_vertex_buffer = nullptr;
     }
+
     if (m_popup_triangle_vertex_buffer)
     {
         m_popup_triangle_vertex_buffer->release();
@@ -322,12 +324,19 @@ void MyRenderHandler::UpdateDimensions(int width, int height, int pixel_density)
 
 void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t window_width, uint32_t window_height)
 {
-    simd::float2 offset = {0.0, 0.0};
-    m_zero_offset_buffer = m_metal_device->newBuffer(sizeof(simd::float2), MTL::ResourceStorageModeShared);
-    memcpy(m_zero_offset_buffer->contents(), &offset, sizeof(simd::float2));
     m_metal_device = metal_device;
     m_window_width = window_width;
     m_window_height = window_height;
+
+        simd::float4 quad_vertices[] = {
+        {-1.0f, -1.0f, 0.0f, 1.0f},
+        {-1.0f, 1.0f, 0.0f, 0.0f},
+        {1.0f, -1.0f, 1.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f, 0.0f}};
+
+    m_triangle_vertex_buffer = m_metal_device->newBuffer(&quad_vertices,
+                                                                   sizeof(quad_vertices),
+                                                                   MTL::ResourceStorageModeShared);
 
     // Initialize the texture or any other resources as needed
     if (m_texture)
@@ -400,16 +409,13 @@ void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t wind
     std::cout << "Render pipeline state created successfully." << std::endl;
 }
 
-void MyApp::encode_render_command(MTL::RenderCommandEncoder *render_command_encoder,
-                                  MTL::Buffer *projection_buffer, MTL::Buffer *triangle_vertex_buffer)
+void MyApp::encode_render_command(MTL::RenderCommandEncoder *render_command_encoder)
 {
     if (m_texture)
     {
         render_command_encoder->setRenderPipelineState(m_render_pipeline);
         render_command_encoder->setDepthStencilState(m_depth_stencil_state_disabled);
-        render_command_encoder->setVertexBuffer(triangle_vertex_buffer, 0, 0);
-        render_command_encoder->setVertexBuffer(projection_buffer, 0, 1);
-        render_command_encoder->setVertexBuffer(m_zero_offset_buffer, 0, 2);
+        render_command_encoder->setVertexBuffer(m_triangle_vertex_buffer, 0, 0);
         render_command_encoder->setCullMode(MTL::CullMode::CullModeNone);
         render_command_encoder->setFragmentTexture(m_texture, /* index */ 0);
         NS::UInteger vertexStart = 0;

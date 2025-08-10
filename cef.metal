@@ -12,13 +12,11 @@ struct VertexOutput
 
 vertex VertexOutput
 cefVertexShader(uint vertexID [[vertex_id]],
-                                            constant float4 *position [[buffer(0)]],
-                                            constant float4x4 &uProjection [[buffer(1)]],
-                                            constant float2 &offset [[buffer(2)]])
+                                            constant float4 *position [[buffer(0)]])
 {
     VertexOutput out;
 
-    out.clip_position = uProjection * float4(position[vertexID][0] + offset.x,position[vertexID][1]+offset.y,0.0,1.0);
+    out.clip_position =   float4(position[vertexID][0], position[vertexID][1],0.0,1.0);
 
     out.uv = float2( position[vertexID][2], position[vertexID][3]);
     return out;

@@ -1,5 +1,4 @@
 #import "metal_view.h"
-#import <Metal/Metal.h>
 #include "imgui.h"
 #include "imgui_impl_metal.h"
 #include "imgui_impl_osx.h"
@@ -72,8 +71,6 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     id<MTLCommandQueue> _commandQueue;
     id<MTLRenderPipelineState> _pipelineState;
     NSMutableString *_textBuffer;
-    id<MTLBuffer> projection_buffer;
-    id<MTLBuffer> triangle_vertex_buffer;
     BOOL _hasMarkedText;
     NSTextInputContext *_myInputContext; 
     // IME state variables
@@ -270,23 +267,6 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     {
         NSLog(@"Pipeline state error: %@", error);
     }
-
-    projection_buffer = [self.device newBufferWithLength:sizeof(matrix_float4x4) options:MTLResourceStorageModeShared];
-    if (!projection_buffer)
-    {
-        NSLog(@"Failed to create projection buffer");
-    }
-    matrix_float4x4 projection_matrix = matrix_ortho(0.0f, (float)frame.size.width, (float)frame.size.height, 0.0f, 1.0f, -1.0f);
-    memcpy(projection_buffer.contents, &projection_matrix, sizeof(matrix_float4x4));
-
-    simd::float4 quad_vertices[] = {
-        {0.0f, 0.0f, 0.0f, 0.0f},
-        {0.0f, (float)frame.size.height, 0.0f, 1.0f},
-        {(float)frame.size.width, 0.0f, 1.0f, 0.0f},
-        {(float)frame.size.width, (float)frame.size.height, 1.0f, 1.0f}};
-
-    triangle_vertex_buffer = [self.device newBufferWithLength:sizeof(quad_vertices) options:MTLResourceStorageModeShared];
-    memcpy(triangle_vertex_buffer.contents, &quad_vertices, sizeof(quad_vertices));
 }
 
 - (void)setupTextInput
@@ -354,7 +334,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 
         [renderEncoder pushDebugGroup:@"Metal View Rendering"];
 
-        _app->encode_render_command((__bridge MTL::RenderCommandEncoder *)renderEncoder, (__bridge MTL::Buffer *)projection_buffer, (__bridge MTL::Buffer *)triangle_vertex_buffer);
+        _app->encode_render_command((__bridge MTL::RenderCommandEncoder *)renderEncoder);
 
         [renderEncoder popDebugGroup];
 
@@ -439,23 +419,6 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     CGFloat pixelDensity = [NSScreen.mainScreen backingScaleFactor];
     pixelDensity = pixelDensity > 0 ? pixelDensity : 1.0;
     _app->update_render_handler_dimensions((int)frameRect.size.width, (int)frameRect.size.height, (int)pixelDensity);
-
-    // Update any size-dependent resources here (like viewport, projection matrix, etc.)
-    if (projection_buffer)
-    {
-        matrix_float4x4 projection_matrix = matrix_ortho(0.0f, (float)frameRect.size.width, (float)frameRect.size.height, 0.0f, 1.0f, -1.0f);
-        memcpy(projection_buffer.contents, &projection_matrix, sizeof(matrix_float4x4));
-    }
-    if (triangle_vertex_buffer)
-    {
-        simd::float4 quad_vertices[] = {
-            {0.0f, 0.0f, 0.0f, 0.0f},
-            {0.0f, (float)frameRect.size.height, 0.0f, 1.0f},
-            {(float)frameRect.size.width, 0.0f, 1.0f, 0.0f},
-            {(float)frameRect.size.width, (float)frameRect.size.height, 1.0f, 1.0f}};
-
-        memcpy(triangle_vertex_buffer.contents, &quad_vertices, sizeof(quad_vertices));
-    }
 
     // Notify CEF about the size change
     if (_app && _app->get_browser() && _app->get_browser()->IsValid())
