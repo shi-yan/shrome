@@ -54,7 +54,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 
     NSLog(@"App terminated, CEF shutdown complete.");
 
-      CefShutdown();
+    CefShutdown();
 }
 
 @end
@@ -72,7 +72,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     id<MTLRenderPipelineState> _pipelineState;
     NSMutableString *_textBuffer;
     BOOL _hasMarkedText;
-    NSTextInputContext *_myInputContext; 
+    NSTextInputContext *_myInputContext;
     // IME state variables
     NSString *_markedTextString;
     NSAttributedString *_markedTextAttributed;
@@ -176,7 +176,8 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     return 0;
 }
 
-- (void)doCommandBySelector:(SEL)selector {
+- (void)doCommandBySelector:(SEL)selector
+{
     // Swallow all IME commands, let your own UI handle them
 }
 
@@ -436,27 +437,35 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 
 - (void)keyDown:(NSEvent *)event
 {
-    if ([event type] != NSEventTypeFlagsChanged)
+    ImGuiIO &io = ImGui::GetIO();
+    if (!io.WantCaptureKeyboard)
     {
-        [self handleKeyEventBeforeTextInputClient:event];
+        if ([event type] != NSEventTypeFlagsChanged)
+        {
+            [self handleKeyEventBeforeTextInputClient:event];
 
-        // Let the input method system handle this
-        [self.inputContext handleEvent:event];
+            // Let the input method system handle this
+            [self.inputContext handleEvent:event];
 
-        CefKeyEvent keyEvent;
-        [self getKeyEvent:keyEvent forEvent:event];
+            CefKeyEvent keyEvent;
+            [self getKeyEvent:keyEvent forEvent:event];
 
-        [self handleKeyEventAfterTextInputClient:keyEvent];
+            [self handleKeyEventAfterTextInputClient:keyEvent];
+        }
     }
 }
 
 - (void)keyUp:(NSEvent *)event
 {
-    CefKeyEvent keyEvent;
-    [self getKeyEvent:keyEvent forEvent:event];
-    keyEvent.type = KEYEVENT_KEYUP;
+    ImGuiIO &io = ImGui::GetIO();
+    if (!io.WantCaptureKeyboard)
+    {
+        CefKeyEvent keyEvent;
+        [self getKeyEvent:keyEvent forEvent:event];
+        keyEvent.type = KEYEVENT_KEYUP;
 
-    _app->inject_key_event(keyEvent);
+        _app->inject_key_event(keyEvent);
+    }
 }
 
 - (void)flagsChanged:(NSEvent *)event
@@ -473,57 +482,67 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 
 - (void)mouseDown:(NSEvent *)event
 {
-    NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
+    ImGuiIO &io = ImGui::GetIO();
 
-    // Update cursor position to mouse click location
-    self.textCursorPosition = locationInView;
-    self.lastMousePosition = locationInView;
-
-    //NSLog(@"Text cursor moved to: (%.1f, %.1f)", locationInView.x, locationInView.y);
-    [self setNeedsDisplay:YES];
-
-    // Convert to CEF mouse event and inject
-    CefMouseEvent mouseEvent;
-    // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
-    mouseEvent.x = static_cast<int>(locationInView.x);
-    mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
-    mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
-
-    CefBrowserHost::MouseButtonType buttonType = CefBrowserHost::MouseButtonType::MBT_LEFT;
-    if ([event buttonNumber] == 1)
+    if (!io.WantCaptureMouse)
     {
-        buttonType = CefBrowserHost::MouseButtonType::MBT_RIGHT;
-    }
-    else if ([event buttonNumber] == 2)
-    {
-        buttonType = CefBrowserHost::MouseButtonType::MBT_MIDDLE;
-    }
+        NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
 
-    _app->inject_mouse_up_down(mouseEvent, buttonType, false, [event clickCount]);
+        // Update cursor position to mouse click location
+        self.textCursorPosition = locationInView;
+        self.lastMousePosition = locationInView;
+
+        // NSLog(@"Text cursor moved to: (%.1f, %.1f)", locationInView.x, locationInView.y);
+        [self setNeedsDisplay:YES];
+
+        // Convert to CEF mouse event and inject
+        CefMouseEvent mouseEvent;
+        // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
+        mouseEvent.x = static_cast<int>(locationInView.x);
+        mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
+        mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+
+        CefBrowserHost::MouseButtonType buttonType = CefBrowserHost::MouseButtonType::MBT_LEFT;
+        if ([event buttonNumber] == 1)
+        {
+            buttonType = CefBrowserHost::MouseButtonType::MBT_RIGHT;
+        }
+        else if ([event buttonNumber] == 2)
+        {
+            buttonType = CefBrowserHost::MouseButtonType::MBT_MIDDLE;
+        }
+
+        _app->inject_mouse_up_down(mouseEvent, buttonType, false, [event clickCount]);
+    }
 }
 
 - (void)mouseUp:(NSEvent *)event
 {
-    NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
+    ImGuiIO &io = ImGui::GetIO();
 
-    // Convert to CEF mouse event and inject
-    CefMouseEvent mouseEvent;
-    // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
-    mouseEvent.x = static_cast<int>(locationInView.x);
-    mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
-    mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
-
-    CefBrowserHost::MouseButtonType buttonType = CefBrowserHost::MouseButtonType::MBT_LEFT;
-    if ([event buttonNumber] == 1)
+    if (!io.WantCaptureMouse)
     {
-        buttonType = CefBrowserHost::MouseButtonType::MBT_RIGHT;
-    }
-    else if ([event buttonNumber] == 2)
-    {
-        buttonType = CefBrowserHost::MouseButtonType::MBT_MIDDLE;
-    }
+        NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
 
-    _app->inject_mouse_up_down(mouseEvent, buttonType, true, [event clickCount]);
+        // Convert to CEF mouse event and inject
+        CefMouseEvent mouseEvent;
+        // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
+        mouseEvent.x = static_cast<int>(locationInView.x);
+        mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
+        mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+
+        CefBrowserHost::MouseButtonType buttonType = CefBrowserHost::MouseButtonType::MBT_LEFT;
+        if ([event buttonNumber] == 1)
+        {
+            buttonType = CefBrowserHost::MouseButtonType::MBT_RIGHT;
+        }
+        else if ([event buttonNumber] == 2)
+        {
+            buttonType = CefBrowserHost::MouseButtonType::MBT_MIDDLE;
+        }
+
+        _app->inject_mouse_up_down(mouseEvent, buttonType, true, [event clickCount]);
+    }
 }
 
 - (void)rightMouseDown:(NSEvent *)event
@@ -548,21 +567,26 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 
 - (void)scrollWheel:(NSEvent *)event
 {
-    // Convert scroll wheel event to CEF mouse wheel event
-    CefMouseEvent mouseEvent;
-    NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
-    // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
-    mouseEvent.x = static_cast<int>(locationInView.x);
-    mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
-    mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+    ImGuiIO &io = ImGui::GetIO();
 
-    int deltaX = static_cast<int>([event scrollingDeltaX]);
-    int deltaY = static_cast<int>([event scrollingDeltaY]);
+    if (!io.WantCaptureMouse)
+    {
+        // Convert scroll wheel event to CEF mouse wheel event
+        CefMouseEvent mouseEvent;
+        NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
+        // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
+        mouseEvent.x = static_cast<int>(locationInView.x);
+        mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
+        mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
 
-    _app->inject_mouse_wheel(mouseEvent, deltaX, deltaY);
+        int deltaX = static_cast<int>([event scrollingDeltaX]);
+        int deltaY = static_cast<int>([event scrollingDeltaY]);
 
-    //NSLog(@"mouse scroll at (%.1f, %.1f) with delta (%d, %d)  (%f, %f)",
-    //      locationInView.x, locationInView.y, deltaX, deltaY, [event scrollingDeltaX], [event scrollingDeltaY]);
+        _app->inject_mouse_wheel(mouseEvent, deltaX, deltaY);
+
+        // NSLog(@"mouse scroll at (%.1f, %.1f) with delta (%d, %d)  (%f, %f)",
+        //       locationInView.x, locationInView.y, deltaX, deltaY, [event scrollingDeltaX], [event scrollingDeltaY]);
+    }
 }
 
 // Helper method to convert AppKit modifier flags to CEF modifier flags
@@ -1169,7 +1193,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         *actualRange = range;
     }
 
-   // NSLog(@"IME window positioned at: (%.1f, %.1f) in screen coordinates", screenRect.origin.x, screenRect.origin.y);
+    // NSLog(@"IME window positioned at: (%.1f, %.1f) in screen coordinates", screenRect.origin.x, screenRect.origin.y);
 
     return screenRect;
 }
