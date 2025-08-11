@@ -91,6 +91,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     int viewportWidth;
     int viewportHeight;
     bool shouldHandleMouseEvents;
+    bool shouldHandleKeyEvents;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame device:(id<MTLDevice>)device
@@ -530,12 +531,22 @@ void SetupDockspace(ImGuiID dockspaceID)
             shouldHandleMouseEvents = false;
         }
 
+        // This is a common pattern to check for focus
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
+        {
+            shouldHandleKeyEvents = true;
+        }
+        else
+        {
+            shouldHandleKeyEvents = false;
+        }
+
         ImVec2 contentSize = ImGui::GetContentRegionAvail();
         ImVec2 startCursorPos = ImGui::GetCursorPos();
-         ImVec2 windowPos = ImGui::GetWindowPos();
+        ImVec2 windowPos = ImGui::GetWindowPos();
         // std::cout << "Window Position: " << windowPos.x << ", " << windowPos.y << std::endl;
-          ImGuiViewport *viewport = ImGui::GetMainViewport();
-                   ImVec2 viewportPos = viewport->Pos;
+        ImGuiViewport *viewport = ImGui::GetMainViewport();
+        ImVec2 viewportPos = viewport->Pos;
         // ... resize framebuffer and render your scene
         holeX = (int)startCursorPos.x + (int)windowPos.x - (int)viewportPos.x;
         holeY = (int)startCursorPos.y + (int)windowPos.y - (int)viewportPos.y;
@@ -650,7 +661,7 @@ void SetupDockspace(ImGuiID dockspaceID)
 - (void)keyDown:(NSEvent *)event
 {
     ImGuiIO &io = ImGui::GetIO();
-    if (!io.WantCaptureKeyboard)
+    if (io.WantCaptureKeyboard && shouldHandleKeyEvents)
     {
         if ([event type] != NSEventTypeFlagsChanged)
         {
@@ -670,7 +681,7 @@ void SetupDockspace(ImGuiID dockspaceID)
 - (void)keyUp:(NSEvent *)event
 {
     ImGuiIO &io = ImGui::GetIO();
-    if (!io.WantCaptureKeyboard)
+    if (io.WantCaptureKeyboard && shouldHandleKeyEvents)
     {
         CefKeyEvent keyEvent;
         [self getKeyEvent:keyEvent forEvent:event];
