@@ -2,7 +2,7 @@
 #include "imgui.h"
 #include "imgui_impl_metal.h"
 #include "imgui_impl_osx.h"
-
+#include "imgui_internal.h"
 #include "include/cef_app.h"
 #include "include/cef_client.h"
 #include "include/cef_render_handler.h"
@@ -84,6 +84,13 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     std::string _textToBeInserted;
     CefRange _setMarkedTextReplacementRange;
     BOOL _unmarkTextCalled;
+    int holeWidth;
+    int holeHeight;
+    int holeX;
+    int holeY;
+    int viewportWidth;
+    int viewportHeight;
+    bool shouldHandleMouseEvents;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame device:(id<MTLDevice>)device
@@ -91,6 +98,12 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     self = [super initWithFrame:frame device:device];
     if (self)
     {
+        holeWidth = 512;
+        holeHeight = 512;
+        holeX = 0;
+        holeY = 0;
+        viewportWidth = frame.size.width;
+        viewportHeight = frame.size.height;
         // Enable drawing to work with Metal
         self.device = device;
         self.enableSetNeedsDisplay = NO;
@@ -107,11 +120,19 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         ImGuiIO &io = ImGui::GetIO();
         (void)io;
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
-        // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
+                                                              // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
+        io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;   // Enable Multi-Viewport / Platform Windows
         // Setup Dear ImGui style
         ImGui::StyleColorsDark();
         // ImGui::StyleColorsLight();
+        ImGuiStyle &style = ImGui::GetStyle();
+
+        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+        {
+            style.WindowRounding = 0.0f;
+            style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+        }
 
         // Setup Renderer backend
         ImGui_ImplMetal_Init(device);
@@ -302,6 +323,35 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     ImGui::DestroyContext();
 }
 
+void SetupDockspace(ImGuiID dockspaceID)
+{
+    // Clear any previous layout
+    ImGui::DockBuilderRemoveNode(dockspaceID);
+
+    // Create a new empty dock node
+    ImGui::DockBuilderAddNode(dockspaceID, ImGuiDockNodeFlags_DockSpace);
+
+    // Get the ID of the central node.
+    // The central node ID is the same as the dockspace ID itself.
+    // However, if you've added other nodes, you can explicitly get it.
+    ImGuiID centralNodeID = dockspaceID;
+
+    // Split the dockspace into left/right and top/bottom nodes if you want other windows
+    // For this example, we just set the central node, but you can add more like this:
+    // ImGuiID leftNodeID, rightNodeID;
+    // ImGui::DockBuilderSplitNode(dockspaceID, ImGuiDir_Left, 0.2f, &leftNodeID, &centralNodeID);
+
+    // Dock your custom rendering window into the central node
+    // "MyRenderWindow" is the title of the window you want to be the central node.
+    ImGui::DockBuilderDockWindow("ShromeWindow", centralNodeID);
+
+    // You can dock other windows as well
+    // ImGui::DockBuilderDockWindow("OtherWindow", leftNodeID);
+
+    // Tell ImGui to apply the layout
+    ImGui::DockBuilderFinish(dockspaceID);
+}
+
 // MTKViewDelegate method - called automatically every frame
 - (void)drawInMTKView:(MTKView *)view
 {
@@ -333,13 +383,11 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         // Draw triangle (3 vertices) + coordinate indicators (24 vertices) = 27 total
         //[renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:27];
 
-        [renderEncoder pushDebugGroup:@"Metal View Rendering"];
+        // [renderEncoder pushDebugGroup:@"Metal View Rendering"];
 
-        _app->encode_render_command((__bridge MTL::RenderCommandEncoder *)renderEncoder);
+        // _app->encode_render_command((__bridge MTL::RenderCommandEncoder *)renderEncoder);
 
-        [renderEncoder popDebugGroup];
-
-        // [commandBuffer commit];
+        // [renderEncoder popDebugGroup];
 
         // NSLog(@"MTKView drawInMTKView called - rendering Metal content");
 
@@ -347,6 +395,82 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         ImGui_ImplMetal_NewFrame(renderPassDescriptor);
         ImGui_ImplOSX_NewFrame(view);
         ImGui::NewFrame();
+
+        {
+
+            // Begin the main dockspace
+            ImGuiWindowFlags windowFlags = /*ImGuiWindowFlags_MenuBar |*/ ImGuiWindowFlags_NoDocking;
+            ImGuiViewport *viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(viewport->WorkPos);
+            ImGui::SetNextWindowSize(viewport->WorkSize);
+            ImGui::SetNextWindowViewport(viewport->ID);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+            windowFlags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+            windowFlags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+
+            ImGui::Begin("DockSpace", nullptr, windowFlags);
+            ImGui::PopStyleVar(2);
+
+            ImGuiID dockspaceID = ImGui::GetID("MyDockSpace");
+
+            // Check if we need to set up the dockspace layout.
+            // This is typically done only once at the start of the application.
+            // You can also add logic to recreate the layout if the main window size changes drastically.
+            if (ImGui::DockBuilderGetNode(dockspaceID) == nullptr)
+            {
+                SetupDockspace(dockspaceID);
+            }
+
+            ImGui::DockSpace(dockspaceID, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+
+            // Get the central dock node
+            // ImGuiDockNode *centralNode = ImGui::DockBuilderGetCentralNode(dockspaceID);
+
+            // Check if the central node exists
+            /*   if (centralNode)
+               {
+                   ImGuiViewport *viewport = ImGui::GetMainViewport();
+                   ImVec2 viewportPos = viewport->Pos;
+                   ImVec2 viewportSize = viewport->Size;
+                   ImVec2 centralPos = centralNode->Pos;
+                   ImVec2 centralSize = centralNode->Size;
+
+                   int metalViewportX = centralPos.x - viewportPos.x;
+                   int metalViewportY = centralPos.y - viewportPos.y;
+                   int metalViewportWidth = centralSize.x;
+                   int metalViewportHeight = centralSize.y;
+
+                   // Now you have the geometry of the central hole!
+                   if (metalViewportWidth != holeWidth || metalViewportHeight != holeHeight)
+                   {
+                       CGFloat pixelDensity = [NSScreen.mainScreen backingScaleFactor];
+                       pixelDensity = pixelDensity > 0 ? pixelDensity : 1.0;
+                       _app->update_render_handler_dimensions((int)centralSize.x, (int)centralSize.y, (int)pixelDensity);
+
+                       // Notify CEF about the size change
+                       if (_app && _app->get_browser() && _app->get_browser()->IsValid())
+                       {
+                           _app->get_browser()->GetHost()->WasResized();
+                       }
+                   }
+
+                   if (metalViewportX != holeX || metalViewportY != holeY || metalViewportWidth != holeWidth || metalViewportHeight != holeHeight ||
+                       (int)viewportSize.x != viewportWidth || (int)viewportSize.y != viewportHeight) {
+                       _app->update_geometry(metalViewportX, metalViewportY, metalViewportWidth, metalViewportHeight, (int)viewportSize.x, (int)viewportSize.y);
+                   }
+
+                   holeWidth = metalViewportWidth;
+                   holeHeight = metalViewportHeight;
+                   holeX = metalViewportX;
+                   holeY = metalViewportY;
+                   viewportWidth = (int)viewportSize.x;
+                   viewportHeight = (int)viewportSize.y;
+               }*/
+
+            // End the main dockspace window
+            ImGui::End();
+        }
 
         // Our state (make them static = more or less global) as a convenience to keep the example terse.
         static bool show_demo_window = true;
@@ -390,6 +514,51 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
             ImGui::End();
         }
 
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+        windowFlags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground;
+
+        ImGui::Begin("ShromeWindow", nullptr, windowFlags);
+        ImGui::PopStyleVar(2);
+        if (ImGui::IsWindowHovered())
+        {
+            shouldHandleMouseEvents = true;
+        }
+        else
+        {
+            shouldHandleMouseEvents = false;
+        }
+
+        ImVec2 contentSize = ImGui::GetContentRegionAvail();
+        ImVec2 startCursorPos = ImGui::GetCursorPos();
+         ImVec2 windowPos = ImGui::GetWindowPos();
+        // std::cout << "Window Position: " << windowPos.x << ", " << windowPos.y << std::endl;
+          ImGuiViewport *viewport = ImGui::GetMainViewport();
+                   ImVec2 viewportPos = viewport->Pos;
+        // ... resize framebuffer and render your scene
+        holeX = (int)startCursorPos.x + (int)windowPos.x - (int)viewportPos.x;
+        holeY = (int)startCursorPos.y + (int)windowPos.y - (int)viewportPos.y;
+        if (contentSize.x != holeWidth || contentSize.y != holeHeight)
+        {
+            CGFloat pixelDensity = [NSScreen.mainScreen backingScaleFactor];
+            pixelDensity = pixelDensity > 0 ? pixelDensity : 1.0;
+            _app->update_render_handler_dimensions((int)contentSize.x, (int)contentSize.y, (int)pixelDensity);
+
+            // Notify CEF about the size change
+            if (_app && _app->get_browser() && _app->get_browser()->IsValid())
+            {
+                _app->get_browser()->GetHost()->WasResized();
+            }
+            holeWidth = contentSize.x;
+            holeHeight = contentSize.y;
+        }
+
+        // Display the framebuffer texture
+        ImTextureID myFramebufferTextureID = reinterpret_cast<ImTextureID>(_app->m_texture);
+        ImGui::Image(myFramebufferTextureID, contentSize, ImVec2(0, 0), ImVec2(1, 1));
+        ImGui::End();
+
         // Rendering
         ImGui::Render();
         ImDrawData *draw_data = ImGui::GetDrawData();
@@ -402,6 +571,13 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         // Present
         [commandBuffer presentDrawable:view.currentDrawable];
         [commandBuffer commit];
+
+        // Update and Render additional Platform Windows
+        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+        {
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+        }
     }
 }
 
@@ -416,16 +592,20 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 {
     [super setFrame:frameRect];
 
-    // Update render handler dimensions and pixel density
-    CGFloat pixelDensity = [NSScreen.mainScreen backingScaleFactor];
-    pixelDensity = pixelDensity > 0 ? pixelDensity : 1.0;
-    _app->update_render_handler_dimensions((int)frameRect.size.width, (int)frameRect.size.height, (int)pixelDensity);
+    // Check for window resize and get the available size
+    /*
 
-    // Notify CEF about the size change
-    if (_app && _app->get_browser() && _app->get_browser()->IsValid())
-    {
-        _app->get_browser()->GetHost()->WasResized();
-    }
+            CGFloat pixelDensity = [NSScreen.mainScreen backingScaleFactor];
+            pixelDensity = pixelDensity > 0 ? pixelDensity : 1.0;
+            _app->update_render_handler_dimensions((int)contentSize.x, (int)contentSize.y, (int)pixelDensity);
+
+            // Notify CEF about the size change
+            if (_app && _app->get_browser() && _app->get_browser()->IsValid())
+            {
+                _app->get_browser()->GetHost()->WasResized();
+            }
+        */
+    // Update render handler dimensions and pixel density
 }
 
 #pragma mark - Event Handling
@@ -433,6 +613,38 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 - (BOOL)acceptsFirstResponder
 {
     return YES;
+}
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event
+{
+    if ([event modifierFlags] & NSEventModifierFlagCommand)
+    {
+        NSString *characters = [event charactersIgnoringModifiers];
+
+        if ([characters isEqualToString:@"c"])
+        {
+            // Handle Copy
+            [self handleCopy];
+            return YES;
+        }
+        else if ([characters isEqualToString:@"v"])
+        {
+            // Handle Paste
+            [self handlePaste];
+            return YES;
+        }
+    }
+    return [super performKeyEquivalent:event];
+}
+
+- (void)handleCopy
+{
+    // Get selected text from CEF
+}
+
+- (void)handlePaste
+{
+    // Get pasteboard content and paste into CEF
 }
 
 - (void)keyDown:(NSEvent *)event
@@ -484,9 +696,14 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 {
     ImGuiIO &io = ImGui::GetIO();
 
-    if (!io.WantCaptureMouse)
+    if (io.WantCaptureMouse && shouldHandleMouseEvents)
     {
         NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
+
+        int mouseX = static_cast<int>(locationInView.x) - holeX;
+        int mouseY = static_cast<int>(self.bounds.size.height - locationInView.y) - holeY;
+        std::cout << "holex " << holeX << " holey " << holeY << std::endl;
+        std::cout << "Mouse down at: (" << mouseX << ", " << mouseY << ")" << std::endl;
 
         // Update cursor position to mouse click location
         self.textCursorPosition = locationInView;
@@ -498,8 +715,8 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         // Convert to CEF mouse event and inject
         CefMouseEvent mouseEvent;
         // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
-        mouseEvent.x = static_cast<int>(locationInView.x);
-        mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
+        mouseEvent.x = mouseX;
+        mouseEvent.y = mouseY;
         mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
 
         CefBrowserHost::MouseButtonType buttonType = CefBrowserHost::MouseButtonType::MBT_LEFT;
@@ -520,15 +737,15 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 {
     ImGuiIO &io = ImGui::GetIO();
 
-    if (!io.WantCaptureMouse)
+    if (io.WantCaptureMouse && shouldHandleMouseEvents)
     {
         NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
 
         // Convert to CEF mouse event and inject
         CefMouseEvent mouseEvent;
         // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
-        mouseEvent.x = static_cast<int>(locationInView.x);
-        mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
+        mouseEvent.x = static_cast<int>(locationInView.x) - holeX;
+        mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y) - holeY;
         mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
 
         CefBrowserHost::MouseButtonType buttonType = CefBrowserHost::MouseButtonType::MBT_LEFT;
@@ -569,14 +786,14 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 {
     ImGuiIO &io = ImGui::GetIO();
 
-    if (!io.WantCaptureMouse)
+    if (io.WantCaptureMouse && shouldHandleMouseEvents)
     {
         // Convert scroll wheel event to CEF mouse wheel event
         CefMouseEvent mouseEvent;
         NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
         // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
-        mouseEvent.x = static_cast<int>(locationInView.x);
-        mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
+        mouseEvent.x = static_cast<int>(locationInView.x) - holeX;
+        mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y) - holeY;
         mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
 
         int deltaX = static_cast<int>([event scrollingDeltaX]);
@@ -838,22 +1055,25 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 
 - (void)mouseMoved:(NSEvent *)event
 {
-    if (self.followMouse)
+    if (shouldHandleMouseEvents == true)
     {
+        if (self.followMouse)
+        {
+            NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
+            self.lastMousePosition = locationInView;
+        }
+
+        // Convert to CEF mouse event and inject
         NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
-        self.lastMousePosition = locationInView;
+        CefMouseEvent mouseEvent;
+        // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
+        mouseEvent.x = static_cast<int>(locationInView.x) - holeX;
+        mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y) - holeY;
+        // std::cout << "mouse motion " << mouseEvent.x << ", " << mouseEvent.y << std::endl;
+        mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+
+        _app->inject_mouse_motion(mouseEvent);
     }
-
-    // Convert to CEF mouse event and inject
-    NSPoint locationInView = [self convertPoint:[event locationInWindow] fromView:nil];
-    CefMouseEvent mouseEvent;
-    // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
-    mouseEvent.x = static_cast<int>(locationInView.x);
-    mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y);
-    // std::cout << "mouse motion " << mouseEvent.x << ", " << mouseEvent.y << std::endl;
-    mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
-
-    _app->inject_mouse_motion(mouseEvent);
 }
 
 - (void)updateTrackingAreas

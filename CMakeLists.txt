@@ -12,6 +12,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 find_library(COCOA_FRAMEWORK Cocoa)
 #find_library(FOUNDATION_FRAMEWORK Foundation)
+find_library(QUARTZCORE_FRAMEWORK QuartzCore)
 find_library(METAL_FRAMEWORK Metal)
 find_library(METALKIT_FRAMEWORK MetalKit)
 find_library(GAMECONTROLLER_FRAMEWORK GameController)
@@ -38,13 +39,10 @@ string(REPLACE "-Werror" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 include (FetchContent)
 
 FetchContent_Populate(
-    stb
-    GIT_REPOSITORY https://github.com/nothings/stb.git
-)
-
-FetchContent_Populate(
   imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
+  GIT_TAG docking
+  GIT_SHALLOW TRUE
 )
 
 FetchContent_Populate(
@@ -242,7 +240,7 @@ string(REPLACE "-Werror" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
     -Wno-unused-variable
  )
   SET_EXECUTABLE_TARGET_PROPERTIES(${CEF_TARGET})
-  target_include_directories(${CEF_TARGET} PRIVATE ${stb_SOURCE_DIR}
+  target_include_directories(${CEF_TARGET} PRIVATE
   ${imgui_SOURCE_DIR}  
   ${imgui_SOURCE_DIR}/backends
   ${metal-cpp_SOURCE_DIR}
@@ -252,6 +250,7 @@ string(REPLACE "-Werror" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 
   target_link_libraries(${CEF_TARGET} libcef_dll_wrapper ${CEF_STANDARD_LIBS}
   ${COCOA_FRAMEWORK} ${METAL_FRAMEWORK} ${METALKIT_FRAMEWORK}
+  ${QUARTZCORE_FRAMEWORK}
   ${GAMECONTROLLER_FRAMEWORK}
   )
   set_target_properties(${CEF_TARGET} PROPERTIES

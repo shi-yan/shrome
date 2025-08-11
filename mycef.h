@@ -168,7 +168,8 @@ class MyClient : public CefClient,
                  public CefDisplayHandler,
                  public CefContextMenuHandler,
                  public CefKeyboardHandler,
-                 public CefFocusHandler
+                 public CefFocusHandler,
+                 public CefCommandHandler
 {
 public:
     ImGuiMouseCursor m_imgui_cursor_type = ImGuiMouseCursor_Arrow;
@@ -290,7 +291,7 @@ public:
     {
         m_closed = true;
         m_browser = nullptr;
-        std::cout << "browser closed ====== " << std::endl;
+        //std::cout << "browser closed ====== " << std::endl;
     }
 
     void request_new_frame()
@@ -309,9 +310,19 @@ public:
     {
         if (m_browser && m_browser->IsValid())
         {
-            std::cout << "inject key event: " << event.type << std::endl;
+            //std::cout << "inject key event: " << event.type << std::endl;
             m_browser->GetHost()->SendKeyEvent(event);
         }
+    }
+
+    void copy() {
+        if (m_browser && m_browser->IsValid() && m_browser->GetMainFrame()) {
+            m_browser->GetMainFrame()->Copy();
+        }
+    }
+
+    void paste() {
+
     }
 
     CefRefPtr<CefBrowser> get_browser()
@@ -347,7 +358,7 @@ public:
     {
         if (m_browser && m_browser->IsValid())
         {
-            std::cout << "browser closed" << std::endl;
+            //std::cout << "browser closed" << std::endl;
             m_browser->GetHost()->CloseBrowser(force_close);
         }
     }
@@ -493,6 +504,10 @@ public:
         return true;
     }
 
+      bool OnChromeCommand(CefRefPtr<CefBrowser> browser,
+                       int command_id,
+                       cef_window_open_disposition_t disposition) override;
+
 private:
     IMPLEMENT_REFCOUNTING(MyClient);
 };
@@ -559,7 +574,7 @@ public:
         window_info.SetAsWindowless(nullptr); // [5, 1]
         window_info.external_begin_frame_enabled = true;
         window_info.shared_texture_enabled = true; // Enable shared textures for Metal
-
+        window_info.runtime_style = CEF_RUNTIME_STYLE_CHROME;
         CefRefPtr<MyRenderHandler> render_handler = new MyRenderHandler( window_info.shared_texture_enabled,
             m_window_width, 
             m_window_height, 
@@ -623,6 +638,12 @@ public:
         {
             // std::cout << "request new frame" << std::endl;
             m_client->request_new_frame();
+        }
+    }
+
+    void copy() {
+        if (m_client) {
+            m_client->copy();
         }
     }
 
@@ -715,6 +736,8 @@ public:
 
     // This is the magic hook provided by CEF, with the correct name.
     void OnScheduleMessagePumpWork(int64_t delay_ms) override;
+
+    void update_geometry(int holeX, int holeY, int holeWidth, int holeHeight, int viewportWidth, int viewportHeight);
 
 private:
     IMPLEMENT_REFCOUNTING(MyApp);

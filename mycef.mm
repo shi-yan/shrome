@@ -8,6 +8,7 @@
 #include "mycef.h"
 #include <dispatch/dispatch.h>
 #include <iostream>
+#include <include/cef_id_mappers.h>
 
 MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_height, uint32_t pixel_density)
     : m_metal_device(metal_device),
@@ -92,7 +93,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 // This creates a Metal texture that aliases the memory of the IOSurface.
                 m_texture = m_metal_device->newTexture(descriptor, io_surface, 0);
 
-                //descriptor->release(); // no need to release
+                // descriptor->release(); // no need to release
             }
         }
     };
@@ -254,6 +255,26 @@ void MyApp::OnBeforeCommandLineProcessing(const CefString &process_type, CefRefP
     // }
 }
 
+void MyApp::update_geometry(int holeX, int holeY, int holeWidth, int holeHeight, int viewportWidth, int viewportHeight)
+{
+    if (m_triangle_vertex_buffer)
+    {
+        std::cout << "update geometry " << holeX << ", " << holeY << ", " << holeWidth << ", " << holeHeight << std::endl;
+        float left = holeX / (float)viewportWidth * 2.0f - 1.0f;
+        float right = (holeX + holeWidth) / (float)viewportWidth * 2.0f - 1.0f;
+        float top = holeY / (float)viewportHeight * 2.0f - 1.0f;
+        float bottom = (holeY + holeHeight) / (float)viewportHeight * 2.0f - 1.0f;
+
+        simd::float4 quad_vertices[] = {
+            {left, top, 0.0f, 1.0f},
+            {left, bottom, 0.0f, 0.0f},
+            {right, top, 1.0f, 1.0f},
+            {right, bottom, 1.0f, 0.0f}};
+
+        memcpy(m_triangle_vertex_buffer->contents(), &quad_vertices, sizeof(quad_vertices));
+    }
+}
+
 MyApp::~MyApp()
 {
     // Clean up resources if necessary
@@ -328,15 +349,15 @@ void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t wind
     m_window_width = window_width;
     m_window_height = window_height;
 
-        simd::float4 quad_vertices[] = {
+    simd::float4 quad_vertices[] = {
         {-1.0f, -1.0f, 0.0f, 1.0f},
         {-1.0f, 1.0f, 0.0f, 0.0f},
         {1.0f, -1.0f, 1.0f, 1.0f},
         {1.0f, 1.0f, 1.0f, 0.0f}};
 
     m_triangle_vertex_buffer = m_metal_device->newBuffer(&quad_vertices,
-                                                                   sizeof(quad_vertices),
-                                                                   MTL::ResourceStorageModeShared);
+                                                         sizeof(quad_vertices),
+                                                         MTL::ResourceStorageModeShared);
 
     // Initialize the texture or any other resources as needed
     if (m_texture)
@@ -443,6 +464,30 @@ void MyClient::OnAfterCreated(CefRefPtr<CefBrowser> browser)
         m_browser->GetHost()->WasResized();   // Initial resize notification
         m_browser->GetHost()->SetFocus(true); // Give focus
     }
+}
+
+bool MyClient::OnChromeCommand(CefRefPtr<CefBrowser> browser,
+                               int command_id,
+                               cef_window_open_disposition_t disposition)
+{
+
+    CEF_DECLARE_COMMAND_ID(IDC_CUT);
+    CEF_DECLARE_COMMAND_ID(IDC_COPY);
+    CEF_DECLARE_COMMAND_ID(IDC_PASTE);
+
+    static const int kAllowedCommandIds[] = {
+        IDC_CUT,
+        IDC_COPY,
+        IDC_PASTE};
+    for (int kAllowedCommandId : kAllowedCommandIds)
+    {
+        if (command_id == kAllowedCommandId)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 std::string get_macos_cache_dir(const std::string &app_name)
