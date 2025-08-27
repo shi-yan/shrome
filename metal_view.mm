@@ -12,6 +12,8 @@
 #include "mycef.h"
 #include <simd/simd.h>
 
+@class CEFManager;
+
 namespace MTL
 {
     class RenderCommandEncoder;
@@ -31,6 +33,16 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
                               {0, 0, sz, 0},
                               {tx, ty, tz, 1}}};
 }
+
+
+@interface CEFManager : NSObject
++ (instancetype) sharedManager;
+- (void) registerApp: (CefRefPtr<MyApp>)app;
+- (void) unregisterApp: (CefRefPtr<MyApp>)app;
+- (void) shutdownIfAllClosed;
+@end
+
+
 
 @implementation AppDelegate
 
@@ -55,6 +67,60 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     NSLog(@"App terminated, CEF shutdown complete.");
 
     CefShutdown();
+}
+
+@end
+
+@implementation CEFManager {
+    NSMutableArray *_activeApps;
+}
+
++ (instancetype) sharedManager {
+    static CEFManager *sharedInstance = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        sharedInstance = [[CEFManager alloc] init];
+    });
+    return sharedInstance;
+}
+
+-(instancetype) init {
+    self = [super init];
+    if (self) {
+        _activeApps = [[NSMutableArray alloc] init];
+
+    }
+    return self;
+}
+
+- (void) registerApp: (CefRefPtr<MyApp>) app {
+    @synchronized(self) {
+        NSValue *appValue = [NSValue valueWithPointer: app.get()];
+        [_activeApps addObject: appValue];
+        NSLog(@"CEF app registered. Active count: %lu", (unsigned long)_activeApps.count);
+    }
+}
+
+- (void)unregisterApp: (CefRefPtr<MyApp>)app {
+    @synchronized(self) {
+        NSValue *appValue = [NSValue valueWithPointer: app.get()];
+        [_activeApps removeObject: appValue];
+        NSLog(@"CEF app unregistered. Active count: %lu", (unsigned long)_activeApps.count);
+
+        if (_activeApps.count == 0) {
+            NSLog(@"All CEF apps closed, quitting message loop");
+            CefQuitMessageLoop();
+        }
+    }
+}
+
+- (void) shutdownIfAllClosed {
+    @synchronized(self) {
+        if (_activeApps.count == 0) {
+            NSLog(@"Forcing CEF message loop quit");
+            CefQuitMessageLoop();
+        }
+    }
 }
 
 @end
@@ -148,6 +214,8 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
         _app->init((__bridge MTL::Device *)self.device, MTLPixelFormatBGRA8Unorm, normalWinWidth, normalWinHeight);
 
         [self setupCEF]; // Initialize CEF
+
+        [[CEFManager sharedManager] registerApp: _app];
 
         // CefDoMessageLoopWork();
     }
@@ -307,22 +375,38 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     self.followMouse = NO; // Set to YES to follow mouse, NO to follow text cursor
 }
 
-- (void)dealloc
-{
-    _app->close(true);
+- (void) cleanup {
+    NSLog(@"MainMetalView cleanup called");
 
-    while (!_app->is_browser_closed())
-    {
-        CefDoMessageLoopWork(); // Or sleep a bit i
+    if (_app ){
+        _app->close(true);
+        int timeout = 100;
+        while (!_app->is_browser_closed() && timeout > 0)
+        {
+            CefDoMessageLoopWork(); // Or sleep a bit i
+            [NSThread sleepForTimeInterval:0.1];
+            timeout--;
+        }
+
+        if (timeout <=0) {
+            NSLog(@"Warning: Browser close timeout reached");
+        }
+
+        [[CEFManager sharedManager] unregisterApp: _app];
+       // CefQuitMessageLoop();
+        _app.reset();
+        _app = nullptr;
+    
+      
     }
-    CefQuitMessageLoop();
-    _app.reset();
-
-    // Cleanup
-    ImGui_ImplMetal_Shutdown();
-    ImGui_ImplOSX_Shutdown();
-    ImGui::DestroyContext();
+      // Cleanup
+      ImGui_ImplMetal_Shutdown();
+      ImGui_ImplOSX_Shutdown();
+      ImGui::DestroyContext();
+      self.delegate = nil;
+      _myInputContext = nil;
 }
+
 
 void SetupDockspace(ImGuiID dockspaceID)
 {

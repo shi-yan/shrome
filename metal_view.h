@@ -29,5 +29,5 @@
 - (uint32_t)convertModifiers:(NSUInteger)appKitModifiers;
 
 - (int)setupCEF;
-
+- (void) cleanup;
 @end
