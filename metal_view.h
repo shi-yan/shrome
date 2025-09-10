@@ -28,6 +28,14 @@
 // Helper method for converting modifier flags
 - (uint32_t)convertModifiers:(NSUInteger)appKitModifiers;
 
+// Edit menu support methods
+- (void)undo;
+- (void)redo;
+- (void)cut;
+- (void)copy;
+- (void)paste;
+- (void)selectAll;
+
 - (int)setupCEF;
 - (void) cleanup;
 @end

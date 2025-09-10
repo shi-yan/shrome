@@ -1519,4 +1519,41 @@ void SetupDockspace(ImGuiID dockspaceID)
     return [_textBuffer length];
 }
 
+// Edit menu support methods
+- (void)undo {
+    if (_app) {
+        _app->undo();
+    }
+}
+
+- (void)redo {
+    if (_app) {
+        _app->redo();
+    }
+}
+
+- (void)cut {
+    if (_app) {
+        _app->cut();
+    }
+}
+
+- (void)copy {
+    if (_app) {
+        _app->copy();
+    }
+}
+
+- (void)paste {
+    if (_app) {
+        _app->paste();
+    }
+}
+
+- (void)selectAll {
+    if (_app) {
+        _app->select_all();
+    }
+}
+
 @end

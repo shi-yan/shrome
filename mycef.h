@@ -13,6 +13,9 @@
 #include <vector>
 #include <functional>
 #include "imgui.h"
+#ifdef __OBJC__
+#import <Cocoa/Cocoa.h>
+#endif
 // #define STB_IMAGE_WRITE_IMPLEMENTATION
 // #include "stb_image_write.h"
 
@@ -52,6 +55,7 @@ public:
     int m_width = 0;
     int m_height = 0;
     int m_pixel_density = 1;
+    std::string m_selected_text; // Track selected text
 
     MyRenderHandler(bool accelerated_rendering, int width, int height, int pixel_density,
                     RenderingCallback rendering_callback,
@@ -158,6 +162,15 @@ public:
         m_popup_sized_callback(rect);
     }
 
+    // Track text selection changes
+    void OnTextSelectionChanged(CefRefPtr<CefBrowser> browser,
+                               const CefString& selected_text,
+                               const CefRange& selected_range) override
+    {
+        m_selected_text = selected_text.ToString();
+        std::cout << "Text selection changed: '" << m_selected_text << "'" << std::endl;
+    }
+
 private:
     IMPLEMENT_REFCOUNTING(MyRenderHandler);
 };
@@ -176,6 +189,12 @@ public:
     bool m_closed = false;
     bool m_has_focus = false;
     CefRefPtr<MyRenderHandler> m_render_handler;
+
+    // Context menu state
+    bool m_show_context_menu = false;
+    std::vector<std::pair<int, std::string>> m_context_menu_items;
+    float m_context_menu_x = 0.0f;
+    float m_context_menu_y = 0.0f;
 
     // ... existing members ...
     CefRefPtr<CefBrowser> m_browser; // Your browser instance
@@ -230,8 +249,60 @@ public:
                   << ", is_system_key " << event.is_system_key
                   << ", focus_on_editable_field " << event.focus_on_editable_field
                   << std::endl;
+
+        // Handle keyboard shortcuts
+        if (event.type == KEYEVENT_KEYDOWN || event.type == KEYEVENT_RAWKEYDOWN) {
+            bool is_cmd = (event.modifiers & EVENTFLAG_COMMAND_DOWN) != 0;
+            
+            if (is_cmd) {
+                switch (event.unmodified_character) {
+                    case 'z':
+                    case 'Z':
+                        if (event.modifiers & EVENTFLAG_SHIFT_DOWN) {
+                            redo();
+                        } else {
+                            undo();
+                        }
+                        *is_keyboard_shortcut = true;
+                        return true; // Block CEF processing
+                        
+                    case 'x':
+                    case 'X':
+                        // Let CEF handle cut, then add our clipboard workaround
+                        *is_keyboard_shortcut = true;
+                        cut();
+                        return true;
+                        
+                    case 'c':
+                    case 'C':
+                        // Let CEF handle copy, then add our clipboard workaround
+                        *is_keyboard_shortcut = true;
+                        copy();
+                        return true;
+                        
+                    case 'v':
+                    case 'V':
+                        paste();
+                        *is_keyboard_shortcut = true;
+                        return true;
+                        
+                    case 'a':
+                    case 'A':
+                        select_all();
+                        *is_keyboard_shortcut = true;
+                        return true;
+                }
+            }
+            
+            // Handle Delete key (Mac keycode)
+            if (event.native_key_code == 0x75) { // Delete key on Mac
+                delete_selection();
+                return true;
+            }
+        }
+        
         *is_keyboard_shortcut = false;
-        return false; // Don't block for now
+        return false; // Let CEF handle other keys
     }
 
     bool OnKeyEvent(CefRefPtr<CefBrowser> browser,
@@ -254,17 +325,45 @@ public:
     }
 
     // CefContextMenuHandler methods:
-    // Implement at least these two to prevent common crashes
     void OnBeforeContextMenu(CefRefPtr<CefBrowser> browser,
                              CefRefPtr<CefFrame> frame,
                              CefRefPtr<CefContextMenuParams> params,
                              CefRefPtr<CefMenuModel> model) override
     {
-        // This method is called before the context menu is displayed.
-        // You can modify 'model' to add/remove/change menu items here.
-        // For now, let's just clear it to prevent any default menu from showing.
-        // If you want to show a default menu, do not clear it.
+        // Clear default menu and build our own
         model->Clear();
+        
+        // Store menu position (convert from browser coordinates to screen coordinates if needed)
+        m_context_menu_x = params->GetXCoord();
+        m_context_menu_y = params->GetYCoord();
+        
+        // Build menu items based on context
+        m_context_menu_items.clear();
+        
+        // Always available actions
+        m_context_menu_items.push_back({1001, "Undo"});
+        m_context_menu_items.push_back({1002, "Redo"});
+        m_context_menu_items.push_back({-1, ""}); // Separator
+        
+        // Selection-based actions
+        bool has_selection = !params->GetSelectionText().empty();
+        if (has_selection) {
+            m_context_menu_items.push_back({1003, "Cut"});
+            m_context_menu_items.push_back({1004, "Copy"});
+        }
+        
+        // Check if we can paste (this is tricky to determine, so we'll always show it)
+        m_context_menu_items.push_back({1005, "Paste"});
+        
+        if (has_selection) {
+            m_context_menu_items.push_back({1006, "Delete"});
+        }
+        
+        m_context_menu_items.push_back({-1, ""}); // Separator
+        m_context_menu_items.push_back({1007, "Select All"});
+        
+        // Don't show the CEF context menu, we'll render with ImGui
+        m_show_context_menu = true;
     }
 
     bool OnContextMenuCommand(CefRefPtr<CefBrowser> browser,
@@ -273,9 +372,30 @@ public:
                               int command_id,
                               EventFlags event_flags) override
     {
-        // This method is called when a context menu item is clicked.
-        // Return true if you handled the command, false otherwise.
-        // Since we cleared the model, this might not be called, but it's good practice.
+        // Handle context menu commands
+        switch (command_id) {
+            case 1001: // Undo
+                undo();
+                return true;
+            case 1002: // Redo
+                redo();
+                return true;
+            case 1003: // Cut
+                cut();
+                return true;
+            case 1004: // Copy
+                copy();
+                return true;
+            case 1005: // Paste
+                paste();
+                return true;
+            case 1006: // Delete
+                delete_selection();
+                return true;
+            case 1007: // Select All
+                select_all();
+                return true;
+        }
         return false;
     }
 
@@ -316,13 +436,70 @@ public:
     }
 
     void copy() {
-        if (m_browser && m_browser->IsValid() && m_browser->GetMainFrame()) {
-            m_browser->GetMainFrame()->Copy();
+        if (m_browser && m_browser->IsValid() && m_browser->GetFocusedFrame()) {
+            std::cout << "Executing copy operation..." << std::endl;
+            m_browser->GetFocusedFrame()->Copy();
+            std::cout << "Copy operation completed" << std::endl;
+            
+            // Workaround: In OSR mode, CEF might not always update the system clipboard
+            // Let's manually copy the selected text to the system clipboard
+            if (m_render_handler && !m_render_handler->m_selected_text.empty()) {
+                std::cout << "Copying to system clipboard: '" << m_render_handler->m_selected_text << "'" << std::endl;
+                copy_to_system_clipboard(m_render_handler->m_selected_text);
+            }
+        }
+    }
+
+private:
+    void copy_to_system_clipboard(const std::string& text) {
+#ifdef __OBJC__
+        @autoreleasepool {
+            NSPasteboard* pasteboard = [NSPasteboard generalPasteboard];
+            [pasteboard clearContents];
+            [pasteboard setString:[NSString stringWithUTF8String:text.c_str()] forType:NSPasteboardTypeString];
+            std::cout << "Text copied to system clipboard successfully" << std::endl;
+        }
+#endif
+    }
+
+public:
+
+    void cut() {
+        if (m_browser && m_browser->IsValid() && m_browser->GetFocusedFrame()) {
+            std::cout << "Executing cut operation..." << std::endl;
+            m_browser->GetFocusedFrame()->Cut();
+            std::cout << "Cut operation completed" << std::endl;
         }
     }
 
     void paste() {
+        if (m_browser && m_browser->IsValid() && m_browser->GetFocusedFrame()) {
+            m_browser->GetFocusedFrame()->Paste();
+        }
+    }
 
+    void undo() {
+        if (m_browser && m_browser->IsValid() && m_browser->GetFocusedFrame()) {
+            m_browser->GetFocusedFrame()->Undo();
+        }
+    }
+
+    void redo() {
+        if (m_browser && m_browser->IsValid() && m_browser->GetFocusedFrame()) {
+            m_browser->GetFocusedFrame()->Redo();
+        }
+    }
+
+    void delete_selection() {
+        if (m_browser && m_browser->IsValid() && m_browser->GetFocusedFrame()) {
+            m_browser->GetFocusedFrame()->Delete();
+        }
+    }
+
+    void select_all() {
+        if (m_browser && m_browser->IsValid() && m_browser->GetFocusedFrame()) {
+            m_browser->GetFocusedFrame()->SelectAll();
+        }
     }
 
     CefRefPtr<CefBrowser> get_browser()
@@ -645,6 +822,90 @@ public:
         if (m_client) {
             m_client->copy();
         }
+    }
+
+    void cut() {
+        if (m_client) {
+            m_client->cut();
+        }
+    }
+
+    void paste() {
+        if (m_client) {
+            m_client->paste();
+        }
+    }
+
+    void undo() {
+        if (m_client) {
+            m_client->undo();
+        }
+    }
+
+    void redo() {
+        if (m_client) {
+            m_client->redo();
+        }
+    }
+
+    void select_all() {
+        if (m_client) {
+            m_client->select_all();
+        }
+    }
+
+    // Context menu methods
+    bool should_show_context_menu() {
+        return m_client && m_client->m_show_context_menu;
+    }
+
+    void hide_context_menu() {
+        if (m_client) {
+            m_client->m_show_context_menu = false;
+        }
+    }
+
+    bool render_context_menu() {
+        if (!m_client || !m_client->m_show_context_menu) {
+            return false;
+        }
+
+        bool menu_clicked = false;
+        
+        // Set the next window position to where the context menu should appear
+        ImGui::SetNextWindowPos(ImVec2(m_client->m_context_menu_x, m_client->m_context_menu_y), 
+                               ImGuiCond_Always);
+        
+        if (ImGui::BeginPopup("ContextMenu")) {
+            for (const auto& item : m_client->m_context_menu_items) {
+                if (item.first == -1) {
+                    // Separator
+                    if (!item.second.empty()) {
+                        ImGui::Separator();
+                    }
+                } else {
+                    if (ImGui::MenuItem(item.second.c_str())) {
+                        // Execute the context menu command
+                        switch (item.first) {
+                            case 1001: undo(); break;
+                            case 1002: redo(); break;
+                            case 1003: cut(); break;
+                            case 1004: copy(); break;
+                            case 1005: paste(); break;
+                            case 1006: 
+                                if (m_client) m_client->delete_selection(); 
+                                break;
+                            case 1007: select_all(); break;
+                        }
+                        menu_clicked = true;
+                        m_client->m_show_context_menu = false;
+                    }
+                }
+            }
+            ImGui::EndPopup();
+        }
+        
+        return menu_clicked;
     }
 
     void inject_mouse_motion(const CefMouseEvent &motion)
