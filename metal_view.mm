@@ -736,7 +736,10 @@ void SetupDockspace(ImGuiID dockspaceID)
 
 - (void)handleCopy
 {
-    // Get selected text from CEF
+    std::cout << "handleCopy called from performKeyEquivalent" << std::endl;
+    if (_app) {
+        _app->copy();
+    }
 }
 
 - (void)handlePaste
@@ -1541,6 +1544,7 @@ void SetupDockspace(ImGuiID dockspaceID)
 }
 
 - (void)copy {
+    std::cout << "Copy called from Edit menu" << std::endl;
     if (_app) {
         _app->copy();
     }

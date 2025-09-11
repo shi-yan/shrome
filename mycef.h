@@ -250,6 +250,7 @@ public:
             bool is_cmd = (event.modifiers & EVENTFLAG_COMMAND_DOWN) != 0;
             
             if (is_cmd) {
+                std::cout << "Cmd key detected with character: '" << (char)event.unmodified_character << "' (code: " << (int)event.unmodified_character << ")" << std::endl;
                 switch (event.unmodified_character) {
                     case 'z':
                     case 'Z':
@@ -263,6 +264,7 @@ public:
                         
                     case 'x':
                     case 'X':
+                        std::cout << "Cut shortcut detected" << std::endl;
                         // Let CEF handle cut, then add our clipboard workaround
                         *is_keyboard_shortcut = true;
                         cut();
@@ -270,6 +272,7 @@ public:
                         
                     case 'c':
                     case 'C':
+                        std::cout << "Copy shortcut detected" << std::endl;
                         // Let CEF handle copy, then add our clipboard workaround
                         *is_keyboard_shortcut = true;
                         copy();
@@ -376,6 +379,7 @@ public:
                 redo();
                 return true;
             case 1003: // Cut
+                std::cout << "Context menu cut selected" << std::endl;
                 cut();
                 return true;
             case 1004: // Copy
@@ -801,6 +805,7 @@ public:
     }
 
     void cut() {
+        std::cout << "Cut called from MyApp" << std::endl;
         if (m_client) {
             m_client->cut();
         }
@@ -865,7 +870,10 @@ public:
                         switch (item.first) {
                             case 1001: undo(); break;
                             case 1002: redo(); break;
-                            case 1003: cut(); break;
+                            case 1003: 
+                            std::cout << "Context menu cut selected" << std::endl;
+                            cut(); 
+                            break;
                             case 1004: copy(); break;
                             case 1005: paste(); break;
                             case 1006: 
