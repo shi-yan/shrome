@@ -656,6 +656,65 @@ void SetupDockspace(ImGuiID dockspaceID)
         ImGui::Image(myFramebufferTextureID, contentSize, ImVec2(0, 0), ImVec2(1, 1));
         ImGui::End();
 
+        // Handle context menu as a regular ImGui window (not popup)
+        static ImVec2 context_menu_pos = ImVec2(0, 0);
+        static bool context_menu_pos_set = false;
+        
+        if (_app && _app->should_show_context_menu()) {
+            // Only capture mouse position once when menu is first shown
+            if (!context_menu_pos_set) {
+                context_menu_pos = ImGui::GetMousePos();
+                context_menu_pos_set = true;
+                std::cout << "Showing context menu at: " << context_menu_pos.x << ", " << context_menu_pos.y << std::endl;
+            }
+            
+            ImGui::SetNextWindowPos(context_menu_pos);
+            ImGui::SetNextWindowSize(ImVec2(150, 0)); // Auto height
+            
+            ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
+                                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |
+                                   ImGuiWindowFlags_NoSavedSettings;
+            
+            if (ImGui::Begin("ContextMenu", nullptr, flags)) {
+                // Manually render context menu items here
+                if (ImGui::MenuItem("Undo")) {
+                    _app->undo();
+                    _app->hide_context_menu();
+                }
+                if (ImGui::MenuItem("Redo")) {
+                    _app->redo();
+                    _app->hide_context_menu();
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Cut")) {
+                    _app->cut();
+                    _app->hide_context_menu();
+                }
+                if (ImGui::MenuItem("Copy")) {
+                    _app->copy();
+                    _app->hide_context_menu();
+                }
+                if (ImGui::MenuItem("Paste")) {
+                    _app->paste();
+                    _app->hide_context_menu();
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Select All")) {
+                    _app->select_all();
+                    _app->hide_context_menu();
+                }
+                
+                // Close if clicking outside the menu
+                if (!ImGui::IsWindowHovered() && ImGui::IsMouseClicked(0)) {
+                    _app->hide_context_menu();
+                }
+            }
+            ImGui::End();
+        } else {
+            // Reset position flag when context menu is hidden
+            context_menu_pos_set = false;
+        }
+
         // Rendering
         ImGui::Render();
         ImDrawData *draw_data = ImGui::GetDrawData();
@@ -714,37 +773,9 @@ void SetupDockspace(ImGuiID dockspaceID)
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event
 {
-    if ([event modifierFlags] & NSEventModifierFlagCommand)
-    {
-        NSString *characters = [event charactersIgnoringModifiers];
-
-        if ([characters isEqualToString:@"c"])
-        {
-            // Handle Copy
-            [self handleCopy];
-            return YES;
-        }
-        else if ([characters isEqualToString:@"v"])
-        {
-            // Handle Paste
-            [self handlePaste];
-            return YES;
-        }
-    }
+    // Let CEF handle all keyboard shortcuts (Cmd+C, Cmd+V, Cmd+X, etc.)
+    // This allows OnPreKeyEvent in mycef.h to handle them consistently
     return [super performKeyEquivalent:event];
-}
-
-- (void)handleCopy
-{
-    std::cout << "handleCopy called from performKeyEquivalent" << std::endl;
-    if (_app) {
-        _app->copy();
-    }
-}
-
-- (void)handlePaste
-{
-    // Get pasteboard content and paste into CEF
 }
 
 - (void)keyDown:(NSEvent *)event

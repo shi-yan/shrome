@@ -853,11 +853,15 @@ public:
 
         bool menu_clicked = false;
         
-        // Set the next window position to where the context menu should appear
-        ImGui::SetNextWindowPos(ImVec2(m_client->m_context_menu_x, m_client->m_context_menu_y), 
-                               ImGuiCond_Always);
+        std::cout << "render_context_menu called with " << m_client->m_context_menu_items.size() << " items" << std::endl;
+        std::cout << "Context menu position: " << m_client->m_context_menu_x << ", " << m_client->m_context_menu_y << std::endl;
+        
+        // Note: CEF coordinates are relative to the browser content area
+        // We should position the popup relative to the mouse cursor instead
+        // ImGui::SetNextWindowPos will be handled by the popup system automatically
         
         if (ImGui::BeginPopup("ContextMenu")) {
+            std::cout << "BeginPopup succeeded, rendering items" << std::endl;
             for (const auto& item : m_client->m_context_menu_items) {
                 if (item.first == -1) {
                     // Separator
