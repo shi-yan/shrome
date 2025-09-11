@@ -1,4 +1,6 @@
 #import "metal_view.h"
+
+
 #include "imgui.h"
 #include "imgui_impl_metal.h"
 #include "imgui_impl_osx.h"
@@ -9,8 +11,8 @@
 #include "include/wrapper/cef_helpers.h"
 #include "include/wrapper/cef_library_loader.h"
 #include "include/cef_command_line.h" // Required for CefCommandLine
-#include "mycef.h"
 #include <simd/simd.h>
+#include "mycef.h"
 
 @class CEFManager;
 

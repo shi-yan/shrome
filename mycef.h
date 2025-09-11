@@ -13,11 +13,6 @@
 #include <vector>
 #include <functional>
 #include "imgui.h"
-#ifdef __OBJC__
-#import <Cocoa/Cocoa.h>
-#endif
-// #define STB_IMAGE_WRITE_IMPLEMENTATION
-// #include "stb_image_write.h"
 
 //--off-screen-rendering-enabled
 
@@ -440,26 +435,7 @@ public:
             std::cout << "Executing copy operation..." << std::endl;
             m_browser->GetFocusedFrame()->Copy();
             std::cout << "Copy operation completed" << std::endl;
-            
-            // Workaround: In OSR mode, CEF might not always update the system clipboard
-            // Let's manually copy the selected text to the system clipboard
-            if (m_render_handler && !m_render_handler->m_selected_text.empty()) {
-                std::cout << "Copying to system clipboard: '" << m_render_handler->m_selected_text << "'" << std::endl;
-                copy_to_system_clipboard(m_render_handler->m_selected_text);
-            }
         }
-    }
-
-private:
-    void copy_to_system_clipboard(const std::string& text) {
-#ifdef __OBJC__
-        @autoreleasepool {
-            NSPasteboard* pasteboard = [NSPasteboard generalPasteboard];
-            [pasteboard clearContents];
-            [pasteboard setString:[NSString stringWithUTF8String:text.c_str()] forType:NSPasteboardTypeString];
-            std::cout << "Text copied to system clipboard successfully" << std::endl;
-        }
-#endif
     }
 
 public:
