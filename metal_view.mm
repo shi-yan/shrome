@@ -1,6 +1,5 @@
 #import "metal_view.h"
 
-
 #include "imgui.h"
 #include "imgui_impl_metal.h"
 #include "imgui_impl_osx.h"
@@ -13,7 +12,8 @@
 #include "include/cef_command_line.h" // Required for CefCommandLine
 #include <simd/simd.h>
 #include "mycef.h"
-
+#import <Cocoa/Cocoa.h>
+#import <Carbon/Carbon.h>
 @class CEFManager;
 
 namespace MTL
@@ -36,15 +36,12 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
                               {tx, ty, tz, 1}}};
 }
 
-
 @interface CEFManager : NSObject
-+ (instancetype) sharedManager;
-- (void) registerApp: (CefRefPtr<MyApp>)app;
-- (void) unregisterApp: (CefRefPtr<MyApp>)app;
-- (void) shutdownIfAllClosed;
++ (instancetype)sharedManager;
+- (void)registerApp:(CefRefPtr<MyApp>)app;
+- (void)unregisterApp:(CefRefPtr<MyApp>)app;
+- (void)shutdownIfAllClosed;
 @end
-
-
 
 @implementation AppDelegate
 
@@ -73,52 +70,63 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 
 @end
 
-@implementation CEFManager {
+@implementation CEFManager
+{
     NSMutableArray *_activeApps;
 }
 
-+ (instancetype) sharedManager {
++ (instancetype)sharedManager
+{
     static CEFManager *sharedInstance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        sharedInstance = [[CEFManager alloc] init];
+      sharedInstance = [[CEFManager alloc] init];
     });
     return sharedInstance;
 }
 
--(instancetype) init {
+- (instancetype)init
+{
     self = [super init];
-    if (self) {
+    if (self)
+    {
         _activeApps = [[NSMutableArray alloc] init];
-
     }
     return self;
 }
 
-- (void) registerApp: (CefRefPtr<MyApp>) app {
-    @synchronized(self) {
-        NSValue *appValue = [NSValue valueWithPointer: app.get()];
-        [_activeApps addObject: appValue];
+- (void)registerApp:(CefRefPtr<MyApp>)app
+{
+    @synchronized(self)
+    {
+        NSValue *appValue = [NSValue valueWithPointer:app.get()];
+        [_activeApps addObject:appValue];
         NSLog(@"CEF app registered. Active count: %lu", (unsigned long)_activeApps.count);
     }
 }
 
-- (void)unregisterApp: (CefRefPtr<MyApp>)app {
-    @synchronized(self) {
-        NSValue *appValue = [NSValue valueWithPointer: app.get()];
-        [_activeApps removeObject: appValue];
+- (void)unregisterApp:(CefRefPtr<MyApp>)app
+{
+    @synchronized(self)
+    {
+        NSValue *appValue = [NSValue valueWithPointer:app.get()];
+        [_activeApps removeObject:appValue];
         NSLog(@"CEF app unregistered. Active count: %lu", (unsigned long)_activeApps.count);
 
-        if (_activeApps.count == 0) {
+        if (_activeApps.count == 0)
+        {
             NSLog(@"All CEF apps closed, quitting message loop");
             CefQuitMessageLoop();
         }
     }
 }
 
-- (void) shutdownIfAllClosed {
-    @synchronized(self) {
-        if (_activeApps.count == 0) {
+- (void)shutdownIfAllClosed
+{
+    @synchronized(self)
+    {
+        if (_activeApps.count == 0)
+        {
             NSLog(@"Forcing CEF message loop quit");
             CefQuitMessageLoop();
         }
@@ -218,7 +226,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 
         [self setupCEF]; // Initialize CEF
 
-        [[CEFManager sharedManager] registerApp: _app];
+        [[CEFManager sharedManager] registerApp:_app];
 
         // CefDoMessageLoopWork();
     }
@@ -378,10 +386,12 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     self.followMouse = NO; // Set to YES to follow mouse, NO to follow text cursor
 }
 
-- (void) cleanup {
+- (void)cleanup
+{
     NSLog(@"MainMetalView cleanup called");
 
-    if (_app ){
+    if (_app)
+    {
         _app->close(true);
         int timeout = 100;
         while (!_app->is_browser_closed() && timeout > 0)
@@ -391,25 +401,23 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
             timeout--;
         }
 
-        if (timeout <=0) {
+        if (timeout <= 0)
+        {
             NSLog(@"Warning: Browser close timeout reached");
         }
 
-        [[CEFManager sharedManager] unregisterApp: _app];
-       // CefQuitMessageLoop();
+        [[CEFManager sharedManager] unregisterApp:_app];
+        // CefQuitMessageLoop();
         _app.reset();
         _app = nullptr;
-    
-      
     }
-      // Cleanup
-      ImGui_ImplMetal_Shutdown();
-      ImGui_ImplOSX_Shutdown();
-      ImGui::DestroyContext();
-      self.delegate = nil;
-      _myInputContext = nil;
+    // Cleanup
+    ImGui_ImplMetal_Shutdown();
+    ImGui_ImplOSX_Shutdown();
+    ImGui::DestroyContext();
+    self.delegate = nil;
+    _myInputContext = nil;
 }
-
 
 void SetupDockspace(ImGuiID dockspaceID)
 {
@@ -563,32 +571,56 @@ void SetupDockspace(ImGuiID dockspaceID)
         // Our state (make them static = more or less global) as a convenience to keep the example terse.
         static bool show_demo_window = true;
         static bool show_another_window = false;
-        static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+        // static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
         if (show_demo_window)
             ImGui::ShowDemoWindow(&show_demo_window);
 
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+        // 2. Browser Controls window
         {
-            static float f = 0.0f;
-            static int counter = 0;
+            static char url_buffer[512] = "https://www.example.com";
 
-            ImGui::Begin("Hello, world!"); // Create a window called "Hello, world!" and append into it.
+            ImGui::Begin("Controls");
 
-            ImGui::Text("This is some useful text.");          // Display some text (you can use a format strings too)
-            ImGui::Checkbox("Demo Window", &show_demo_window); // Edit bools storing our window open/close state
+            // URL input and navigation controls
+            ImGui::Text("URL:");
+            ImGui::SetNextItemWidth(-150); // Leave space for Go button
+            ImGui::InputText("##url", url_buffer, sizeof(url_buffer));
+            ImGui::SameLine();
+            if (ImGui::Button("Go"))
+            {
+                if (_app && _app->get_browser() && _app->get_browser()->IsValid())
+                {
+                    _app->get_browser()->GetMainFrame()->LoadURL(url_buffer);
+                }
+            }
+
+            ImGui::Separator();
+
+            // Navigation buttons
+            if (ImGui::Button("Back"))
+            {
+                if (_app && _app->get_browser() && _app->get_browser()->IsValid())
+                {
+                    _app->get_browser()->GoBack();
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Reload"))
+            {
+                if (_app && _app->get_browser() && _app->get_browser()->IsValid())
+                {
+                    _app->get_browser()->Reload();
+                }
+            }
+
+            ImGui::Separator();
+
+            // Keep the demo window checkbox for testing
+            ImGui::Checkbox("Demo Window", &show_demo_window);
             ImGui::Checkbox("Another Window", &show_another_window);
 
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);             // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float *)&clear_color); // Edit 3 floats representing a color
-
-            if (ImGui::Button("Button")) // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
-
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::End();
         }
 
@@ -660,58 +692,70 @@ void SetupDockspace(ImGuiID dockspaceID)
         // Handle context menu as a regular ImGui window (not popup)
         static ImVec2 context_menu_pos = ImVec2(0, 0);
         static bool context_menu_pos_set = false;
-        
-        if (_app && _app->should_show_context_menu()) {
+
+        if (_app && _app->should_show_context_menu())
+        {
             // Only capture mouse position once when menu is first shown
-            if (!context_menu_pos_set) {
+            if (!context_menu_pos_set)
+            {
                 context_menu_pos = ImGui::GetMousePos();
                 context_menu_pos_set = true;
                 std::cout << "Showing context menu at: " << context_menu_pos.x << ", " << context_menu_pos.y << std::endl;
             }
-            
+
             ImGui::SetNextWindowPos(context_menu_pos);
             ImGui::SetNextWindowSize(ImVec2(150, 0)); // Auto height
-            
-            ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
-                                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |
-                                   ImGuiWindowFlags_NoSavedSettings;
-            
-            if (ImGui::Begin("ContextMenu", nullptr, flags)) {
+
+            ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |
+                                     ImGuiWindowFlags_NoSavedSettings;
+
+            if (ImGui::Begin("ContextMenu", nullptr, flags))
+            {
                 // Manually render context menu items here
-                if (ImGui::MenuItem("Undo")) {
+                if (ImGui::MenuItem("Undo"))
+                {
                     _app->undo();
                     _app->hide_context_menu();
                 }
-                if (ImGui::MenuItem("Redo")) {
+                if (ImGui::MenuItem("Redo"))
+                {
                     _app->redo();
                     _app->hide_context_menu();
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Cut")) {
+                if (ImGui::MenuItem("Cut"))
+                {
                     _app->cut();
                     _app->hide_context_menu();
                 }
-                if (ImGui::MenuItem("Copy")) {
+                if (ImGui::MenuItem("Copy"))
+                {
                     _app->copy();
                     _app->hide_context_menu();
                 }
-                if (ImGui::MenuItem("Paste")) {
+                if (ImGui::MenuItem("Paste"))
+                {
                     _app->paste();
                     _app->hide_context_menu();
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Select All")) {
+                if (ImGui::MenuItem("Select All"))
+                {
                     _app->select_all();
                     _app->hide_context_menu();
                 }
-                
+
                 // Close if clicking outside the menu
-                if (!ImGui::IsWindowHovered() && ImGui::IsMouseClicked(0)) {
+                if (!ImGui::IsWindowHovered() && ImGui::IsMouseClicked(0))
+                {
                     _app->hide_context_menu();
                 }
             }
             ImGui::End();
-        } else {
+        }
+        else
+        {
             // Reset position flag when context menu is hidden
             context_menu_pos_set = false;
         }
@@ -782,6 +826,10 @@ void SetupDockspace(ImGuiID dockspaceID)
 - (void)keyDown:(NSEvent *)event
 {
     ImGuiIO &io = ImGui::GetIO();
+
+
+
+    // If CEF has focus and ImGui wants keyboard, send to CEF
     if (io.WantCaptureKeyboard && shouldHandleKeyEvents)
     {
         if ([event type] != NSEventTypeFlagsChanged)
@@ -796,12 +844,30 @@ void SetupDockspace(ImGuiID dockspaceID)
 
             [self handleKeyEventAfterTextInputClient:keyEvent];
         }
+        return;
+    }
+
+        // Always let ImGui process the event first
+    if (!ImGui_ImplOSX_HandleEvent(event, self))
+    {
+        [super keyDown:event];
+    }
+
+    // If ImGui wants keyboard and CEF doesn't have focus, let ImGui handle it
+    if (io.WantCaptureKeyboard && !shouldHandleKeyEvents)
+    {
+        // ImGui will handle this through its own text input system
+        [self interpretKeyEvents:@[ event ]];
+        return;
     }
 }
 
 - (void)keyUp:(NSEvent *)event
 {
     ImGuiIO &io = ImGui::GetIO();
+
+
+    // If CEF has focus and ImGui wants keyboard, send to CEF
     if (io.WantCaptureKeyboard && shouldHandleKeyEvents)
     {
         CefKeyEvent keyEvent;
@@ -809,6 +875,14 @@ void SetupDockspace(ImGuiID dockspaceID)
         keyEvent.type = KEYEVENT_KEYUP;
 
         _app->inject_key_event(keyEvent);
+        return;
+    }
+
+
+    // Always let ImGui process the event first
+    if (!ImGui_ImplOSX_HandleEvent(event, self))
+    {
+        [super keyUp:event];
     }
 }
 
@@ -862,7 +936,7 @@ void SetupDockspace(ImGuiID dockspaceID)
         }
 
         _app->inject_mouse_up_down(mouseEvent, buttonType, false, [event clickCount]);
-        
+
         // Start drag tracking
         isDragging = true;
     }
@@ -894,7 +968,7 @@ void SetupDockspace(ImGuiID dockspaceID)
         }
 
         _app->inject_mouse_up_down(mouseEvent, buttonType, true, [event clickCount]);
-        
+
         // End drag tracking
         isDragging = false;
     }
@@ -945,7 +1019,7 @@ void SetupDockspace(ImGuiID dockspaceID)
 }
 
 // Helper method to convert AppKit event to CEF modifier flags
-- (uint32_t)convertModifiers:(NSEvent*)event
+- (uint32_t)convertModifiers:(NSEvent *)event
 {
     uint32_t cefModifiers = 0;
 
@@ -980,24 +1054,25 @@ void SetupDockspace(ImGuiID dockspaceID)
     }
 
     // Mouse buttons - based on event type
-    switch ([event type]) {
-        case NSEventTypeLeftMouseDragged:
-        case NSEventTypeLeftMouseDown:
-        case NSEventTypeLeftMouseUp:
-            cefModifiers |= EVENTFLAG_LEFT_MOUSE_BUTTON;
-            break;
-        case NSEventTypeRightMouseDragged:
-        case NSEventTypeRightMouseDown:
-        case NSEventTypeRightMouseUp:
-            cefModifiers |= EVENTFLAG_RIGHT_MOUSE_BUTTON;
-            break;
-        case NSEventTypeOtherMouseDragged:
-        case NSEventTypeOtherMouseDown:
-        case NSEventTypeOtherMouseUp:
-            cefModifiers |= EVENTFLAG_MIDDLE_MOUSE_BUTTON;
-            break;
-        default:
-            break;
+    switch ([event type])
+    {
+    case NSEventTypeLeftMouseDragged:
+    case NSEventTypeLeftMouseDown:
+    case NSEventTypeLeftMouseUp:
+        cefModifiers |= EVENTFLAG_LEFT_MOUSE_BUTTON;
+        break;
+    case NSEventTypeRightMouseDragged:
+    case NSEventTypeRightMouseDown:
+    case NSEventTypeRightMouseUp:
+        cefModifiers |= EVENTFLAG_RIGHT_MOUSE_BUTTON;
+        break;
+    case NSEventTypeOtherMouseDragged:
+    case NSEventTypeOtherMouseDown:
+    case NSEventTypeOtherMouseUp:
+        cefModifiers |= EVENTFLAG_MIDDLE_MOUSE_BUTTON;
+        break;
+    default:
+        break;
     }
 
     return cefModifiers;
@@ -1376,11 +1451,308 @@ void SetupDockspace(ImGuiID dockspaceID)
 
 #pragma mark - NSTextInputClient Protocol
 
+static ImGuiKey ImGui_ImplOSX_KeyCodeToImGuiKey(int key_code)
+{
+    switch (key_code)
+    {
+        case kVK_ANSI_A: return ImGuiKey_A;
+        case kVK_ANSI_S: return ImGuiKey_S;
+        case kVK_ANSI_D: return ImGuiKey_D;
+        case kVK_ANSI_F: return ImGuiKey_F;
+        case kVK_ANSI_H: return ImGuiKey_H;
+        case kVK_ANSI_G: return ImGuiKey_G;
+        case kVK_ANSI_Z: return ImGuiKey_Z;
+        case kVK_ANSI_X: return ImGuiKey_X;
+        case kVK_ANSI_C: return ImGuiKey_C;
+        case kVK_ANSI_V: return ImGuiKey_V;
+        case kVK_ANSI_B: return ImGuiKey_B;
+        case kVK_ANSI_Q: return ImGuiKey_Q;
+        case kVK_ANSI_W: return ImGuiKey_W;
+        case kVK_ANSI_E: return ImGuiKey_E;
+        case kVK_ANSI_R: return ImGuiKey_R;
+        case kVK_ANSI_Y: return ImGuiKey_Y;
+        case kVK_ANSI_T: return ImGuiKey_T;
+        case kVK_ANSI_1: return ImGuiKey_1;
+        case kVK_ANSI_2: return ImGuiKey_2;
+        case kVK_ANSI_3: return ImGuiKey_3;
+        case kVK_ANSI_4: return ImGuiKey_4;
+        case kVK_ANSI_6: return ImGuiKey_6;
+        case kVK_ANSI_5: return ImGuiKey_5;
+        case kVK_ANSI_Equal: return ImGuiKey_Equal;
+        case kVK_ANSI_9: return ImGuiKey_9;
+        case kVK_ANSI_7: return ImGuiKey_7;
+        case kVK_ANSI_Minus: return ImGuiKey_Minus;
+        case kVK_ANSI_8: return ImGuiKey_8;
+        case kVK_ANSI_0: return ImGuiKey_0;
+        case kVK_ANSI_RightBracket: return ImGuiKey_RightBracket;
+        case kVK_ANSI_O: return ImGuiKey_O;
+        case kVK_ANSI_U: return ImGuiKey_U;
+        case kVK_ANSI_LeftBracket: return ImGuiKey_LeftBracket;
+        case kVK_ANSI_I: return ImGuiKey_I;
+        case kVK_ANSI_P: return ImGuiKey_P;
+        case kVK_ANSI_L: return ImGuiKey_L;
+        case kVK_ANSI_J: return ImGuiKey_J;
+        case kVK_ANSI_Quote: return ImGuiKey_Apostrophe;
+        case kVK_ANSI_K: return ImGuiKey_K;
+        case kVK_ANSI_Semicolon: return ImGuiKey_Semicolon;
+        case kVK_ANSI_Backslash: return ImGuiKey_Backslash;
+        case kVK_ANSI_Comma: return ImGuiKey_Comma;
+        case kVK_ANSI_Slash: return ImGuiKey_Slash;
+        case kVK_ANSI_N: return ImGuiKey_N;
+        case kVK_ANSI_M: return ImGuiKey_M;
+        case kVK_ANSI_Period: return ImGuiKey_Period;
+        case kVK_ANSI_Grave: return ImGuiKey_GraveAccent;
+        case kVK_ANSI_KeypadDecimal: return ImGuiKey_KeypadDecimal;
+        case kVK_ANSI_KeypadMultiply: return ImGuiKey_KeypadMultiply;
+        case kVK_ANSI_KeypadPlus: return ImGuiKey_KeypadAdd;
+        case kVK_ANSI_KeypadClear: return ImGuiKey_NumLock;
+        case kVK_ANSI_KeypadDivide: return ImGuiKey_KeypadDivide;
+        case kVK_ANSI_KeypadEnter: return ImGuiKey_KeypadEnter;
+        case kVK_ANSI_KeypadMinus: return ImGuiKey_KeypadSubtract;
+        case kVK_ANSI_KeypadEquals: return ImGuiKey_KeypadEqual;
+        case kVK_ANSI_Keypad0: return ImGuiKey_Keypad0;
+        case kVK_ANSI_Keypad1: return ImGuiKey_Keypad1;
+        case kVK_ANSI_Keypad2: return ImGuiKey_Keypad2;
+        case kVK_ANSI_Keypad3: return ImGuiKey_Keypad3;
+        case kVK_ANSI_Keypad4: return ImGuiKey_Keypad4;
+        case kVK_ANSI_Keypad5: return ImGuiKey_Keypad5;
+        case kVK_ANSI_Keypad6: return ImGuiKey_Keypad6;
+        case kVK_ANSI_Keypad7: return ImGuiKey_Keypad7;
+        case kVK_ANSI_Keypad8: return ImGuiKey_Keypad8;
+        case kVK_ANSI_Keypad9: return ImGuiKey_Keypad9;
+        case kVK_Return: return ImGuiKey_Enter;
+        case kVK_Tab: return ImGuiKey_Tab;
+        case kVK_Space: return ImGuiKey_Space;
+        case kVK_Delete: return ImGuiKey_Backspace;
+        case kVK_Escape: return ImGuiKey_Escape;
+        case kVK_CapsLock: return ImGuiKey_CapsLock;
+        case kVK_Control: return ImGuiKey_LeftCtrl;
+        case kVK_Shift: return ImGuiKey_LeftShift;
+        case kVK_Option: return ImGuiKey_LeftAlt;
+        case kVK_Command: return ImGuiKey_LeftSuper;
+        case kVK_RightControl: return ImGuiKey_RightCtrl;
+        case kVK_RightShift: return ImGuiKey_RightShift;
+        case kVK_RightOption: return ImGuiKey_RightAlt;
+        case kVK_RightCommand: return ImGuiKey_RightSuper;
+//      case kVK_Function: return ImGuiKey_;
+//      case kVK_VolumeUp: return ImGuiKey_;
+//      case kVK_VolumeDown: return ImGuiKey_;
+//      case kVK_Mute: return ImGuiKey_;
+        case kVK_F1: return ImGuiKey_F1;
+        case kVK_F2: return ImGuiKey_F2;
+        case kVK_F3: return ImGuiKey_F3;
+        case kVK_F4: return ImGuiKey_F4;
+        case kVK_F5: return ImGuiKey_F5;
+        case kVK_F6: return ImGuiKey_F6;
+        case kVK_F7: return ImGuiKey_F7;
+        case kVK_F8: return ImGuiKey_F8;
+        case kVK_F9: return ImGuiKey_F9;
+        case kVK_F10: return ImGuiKey_F10;
+        case kVK_F11: return ImGuiKey_F11;
+        case kVK_F12: return ImGuiKey_F12;
+        case kVK_F13: return ImGuiKey_F13;
+        case kVK_F14: return ImGuiKey_F14;
+        case kVK_F15: return ImGuiKey_F15;
+        case kVK_F16: return ImGuiKey_F16;
+        case kVK_F17: return ImGuiKey_F17;
+        case kVK_F18: return ImGuiKey_F18;
+        case kVK_F19: return ImGuiKey_F19;
+        case kVK_F20: return ImGuiKey_F20;
+        case 0x6E: return ImGuiKey_Menu;
+        case kVK_Help: return ImGuiKey_Insert;
+        case kVK_Home: return ImGuiKey_Home;
+        case kVK_PageUp: return ImGuiKey_PageUp;
+        case kVK_ForwardDelete: return ImGuiKey_Delete;
+        case kVK_End: return ImGuiKey_End;
+        case kVK_PageDown: return ImGuiKey_PageDown;
+        case kVK_LeftArrow: return ImGuiKey_LeftArrow;
+        case kVK_RightArrow: return ImGuiKey_RightArrow;
+        case kVK_DownArrow: return ImGuiKey_DownArrow;
+        case kVK_UpArrow: return ImGuiKey_UpArrow;
+        default: return ImGuiKey_None;
+    }
+}
+
+// Must only be called for a mouse event, otherwise an exception occurs
+// (Note that NSEventTypeScrollWheel is considered "other input". Oddly enough an exception does not occur with it, but the value will sometimes be wrong!)
+static ImGuiMouseSource GetMouseSource(NSEvent* event)
+{
+    switch (event.subtype)
+    {
+        case NSEventSubtypeTabletPoint:
+            return ImGuiMouseSource_Pen;
+        // macOS considers input from relative touch devices (like the trackpad or Apple Magic Mouse) to be touch input.
+        // This doesn't really make sense for Dear ImGui, which expects absolute touch devices only.
+        // There does not seem to be a simple way to disambiguate things here so we consider NSEventSubtypeTouch events to always come from mice.
+        // See https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/EventOverview/HandlingTouchEvents/HandlingTouchEvents.html#//apple_ref/doc/uid/10000060i-CH13-SW24
+        //case NSEventSubtypeTouch:
+        //    return ImGuiMouseSource_TouchScreen;
+        case NSEventSubtypeMouseEvent:
+        default:
+            return ImGuiMouseSource_Mouse;
+    }
+}
+
+static bool ImGui_ImplOSX_HandleEvent(NSEvent* event, NSView* view)
+{
+    // Only process events from the window containing ImGui view
+    if (event.window != view.window)
+        return false;
+    ImGuiIO& io = ImGui::GetIO();
+
+    if (event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown || event.type == NSEventTypeOtherMouseDown)
+    {
+        int button = (int)[event buttonNumber];
+        if (button >= 0 && button < ImGuiMouseButton_COUNT)
+        {
+            io.AddMouseSourceEvent(GetMouseSource(event));
+            io.AddMouseButtonEvent(button, true);
+        }
+        return io.WantCaptureMouse;
+    }
+
+    if (event.type == NSEventTypeLeftMouseUp || event.type == NSEventTypeRightMouseUp || event.type == NSEventTypeOtherMouseUp)
+    {
+        int button = (int)[event buttonNumber];
+        if (button >= 0 && button < ImGuiMouseButton_COUNT)
+        {
+            io.AddMouseSourceEvent(GetMouseSource(event));
+            io.AddMouseButtonEvent(button, false);
+        }
+        return io.WantCaptureMouse;
+    }
+
+    if (event.type == NSEventTypeMouseMoved || event.type == NSEventTypeLeftMouseDragged || event.type == NSEventTypeRightMouseDragged || event.type == NSEventTypeOtherMouseDragged)
+    {
+        NSPoint mousePoint = event.locationInWindow;
+        if (event.window == nil)
+            mousePoint = [[view window] convertPointFromScreen:mousePoint];
+        mousePoint = [view convertPoint:mousePoint fromView:nil];
+        if ([view isFlipped])
+            mousePoint = NSMakePoint(mousePoint.x, mousePoint.y);
+        else
+            mousePoint = NSMakePoint(mousePoint.x, view.bounds.size.height - mousePoint.y);
+        io.AddMouseSourceEvent(GetMouseSource(event));
+        io.AddMousePosEvent((float)mousePoint.x, (float)mousePoint.y);
+        return io.WantCaptureMouse;
+    }
+
+    if (event.type == NSEventTypeScrollWheel)
+    {
+        // Ignore canceled events.
+        //
+        // From macOS 12.1, scrolling with two fingers and then decelerating
+        // by tapping two fingers results in two events appearing:
+        //
+        // 1. A scroll wheel NSEvent, with a phase == NSEventPhaseMayBegin, when the user taps
+        // two fingers to decelerate or stop the scroll events.
+        //
+        // 2. A scroll wheel NSEvent, with a phase == NSEventPhaseCancelled, when the user releases the
+        // two-finger tap. It is this event that sometimes contains large values for scrollingDeltaX and
+        // scrollingDeltaY. When these are added to the current x and y positions of the scrolling view,
+        // it appears to jump up or down. It can be observed in Preview, various JetBrains IDEs and here.
+        if (event.phase == NSEventPhaseCancelled)
+            return false;
+
+        double wheel_dx = 0.0;
+        double wheel_dy = 0.0;
+
+        #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
+        if (floor(NSAppKitVersionNumber) > NSAppKitVersionNumber10_6)
+        {
+            wheel_dx = [event scrollingDeltaX];
+            wheel_dy = [event scrollingDeltaY];
+            if ([event hasPreciseScrollingDeltas])
+            {
+                wheel_dx *= 0.01;
+                wheel_dy *= 0.01;
+            }
+        }
+        else
+        #endif // MAC_OS_X_VERSION_MAX_ALLOWED
+        {
+            wheel_dx = [event deltaX] * 0.1;
+            wheel_dy = [event deltaY] * 0.1;
+        }
+        if (wheel_dx != 0.0 || wheel_dy != 0.0)
+            io.AddMouseWheelEvent((float)wheel_dx, (float)wheel_dy);
+
+        return io.WantCaptureMouse;
+    }
+
+    if (event.type == NSEventTypeKeyDown || event.type == NSEventTypeKeyUp)
+    {
+        if ([event isARepeat])
+            return io.WantCaptureKeyboard;
+
+        int key_code = (int)[event keyCode];
+        ImGuiKey key = ImGui_ImplOSX_KeyCodeToImGuiKey(key_code);
+        io.AddKeyEvent(key, event.type == NSEventTypeKeyDown);
+        io.SetKeyEventNativeData(key, key_code, -1); // To support legacy indexing (<1.87 user code)
+
+        return io.WantCaptureKeyboard;
+    }
+
+    if (event.type == NSEventTypeFlagsChanged)
+    {
+        unsigned short key_code = [event keyCode];
+        NSEventModifierFlags modifier_flags = [event modifierFlags];
+
+        io.AddKeyEvent(ImGuiMod_Shift, (modifier_flags & NSEventModifierFlagShift)   != 0);
+        io.AddKeyEvent(ImGuiMod_Ctrl,  (modifier_flags & NSEventModifierFlagControl) != 0);
+        io.AddKeyEvent(ImGuiMod_Alt,   (modifier_flags & NSEventModifierFlagOption)  != 0);
+        io.AddKeyEvent(ImGuiMod_Super, (modifier_flags & NSEventModifierFlagCommand) != 0);
+
+        ImGuiKey key = ImGui_ImplOSX_KeyCodeToImGuiKey(key_code);
+        if (key != ImGuiKey_None)
+        {
+            // macOS does not generate down/up event for modifiers. We're trying
+            // to use hardware dependent masks to extract that information.
+            // 'imgui_mask' is left as a fallback.
+            NSEventModifierFlags mask = 0;
+            switch (key)
+            {
+                case ImGuiKey_LeftCtrl:   mask = 0x0001; break;
+                case ImGuiKey_RightCtrl:  mask = 0x2000; break;
+                case ImGuiKey_LeftShift:  mask = 0x0002; break;
+                case ImGuiKey_RightShift: mask = 0x0004; break;
+                case ImGuiKey_LeftSuper:  mask = 0x0008; break;
+                case ImGuiKey_RightSuper: mask = 0x0010; break;
+                case ImGuiKey_LeftAlt:    mask = 0x0020; break;
+                case ImGuiKey_RightAlt:   mask = 0x0040; break;
+                default:
+                    return io.WantCaptureKeyboard;
+            }
+            io.AddKeyEvent(key, (modifier_flags & mask) != 0);
+            io.SetKeyEventNativeData(key, key_code, -1); // To support legacy indexing (<1.87 user code)
+        }
+
+        return io.WantCaptureKeyboard;
+    }
+
+    return false;
+}
+
+
 - (void)insertText:(id)string replacementRange:(NSRange)replacementRange
 {
     NSString *text = [string isKindOfClass:[NSAttributedString class]] ? [(NSAttributedString *)string string] : (NSString *)string;
 
     NSLog(@"Insert text: '%@'", text);
+
+    // If CEF doesn't have focus, this text input is for ImGui
+    if (!shouldHandleKeyEvents)
+    {
+        ImGuiIO &io = ImGui::GetIO();
+
+        NSString *characters;
+        if ([string isKindOfClass:[NSAttributedString class]])
+            characters = [string string];
+        else
+            characters = (NSString *)string;
+
+        io.AddInputCharactersUTF8(characters.UTF8String);
+    }
 
     // Replace any marked text
     if (_hasMarkedText)
@@ -1601,39 +1973,51 @@ void SetupDockspace(ImGuiID dockspaceID)
 }
 
 // Edit menu support methods
-- (void)undo {
-    if (_app) {
+- (void)undo
+{
+    if (_app)
+    {
         _app->undo();
     }
 }
 
-- (void)redo {
-    if (_app) {
+- (void)redo
+{
+    if (_app)
+    {
         _app->redo();
     }
 }
 
-- (void)cut {
-    if (_app) {
+- (void)cut
+{
+    if (_app)
+    {
         _app->cut();
     }
 }
 
-- (void)copy {
+- (void)copy
+{
     std::cout << "Copy called from Edit menu" << std::endl;
-    if (_app) {
+    if (_app)
+    {
         _app->copy();
     }
 }
 
-- (void)paste {
-    if (_app) {
+- (void)paste
+{
+    if (_app)
+    {
         _app->paste();
     }
 }
 
-- (void)selectAll {
-    if (_app) {
+- (void)selectAll
+{
+    if (_app)
+    {
         _app->select_all();
     }
 }
