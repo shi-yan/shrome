@@ -614,6 +614,51 @@ void SetupDockspace(ImGuiID dockspaceID)
                     _app->get_browser()->Reload();
                 }
             }
+            ImGui::SameLine();
+            if (ImGui::Button("DevTools"))
+            {
+                if (_app)
+                {
+                    _app->show_dev_tools();
+                }
+            }
+
+            ImGui::Separator();
+
+            // Zoom controls
+            if (_app)
+            {
+                double zoom_percentage = _app->get_zoom_percentage();
+                ImGui::Text("Zoom: %.0f%%", zoom_percentage);
+            }
+            else
+            {
+                ImGui::Text("Zoom: 100%%");
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Zoom In (+)"))
+            {
+                if (_app)
+                {
+                    _app->zoom_in();
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Zoom Out (-)"))
+            {
+                if (_app)
+                {
+                    _app->zoom_out();
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Reset (0)"))
+            {
+                if (_app)
+                {
+                    _app->zoom_reset();
+                }
+            }
 
             ImGui::Separator();
 

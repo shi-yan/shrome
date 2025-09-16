@@ -5,8 +5,5 @@ Shrome is my shitty browser build, duct-taped together with Metal, ImGui, and CE
 * [] ime selector shows up
 * [] popup
 * [] multi-tab
-* [] open debugger
-* [] ctrl+- zoom
 * [] ctrl+f find
-* [] reload/back shortcut
 * 

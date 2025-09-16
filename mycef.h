@@ -12,6 +12,7 @@
 #include <iostream>
 #include <vector>
 #include <functional>
+#include <cmath>
 #include "imgui.h"
 
 //--off-screen-rendering-enabled
@@ -287,6 +288,34 @@ public:
                     case 'a':
                     case 'A':
                         select_all();
+                        *is_keyboard_shortcut = true;
+                        return true;
+
+                    case '=':
+                    case '+':
+                        // Cmd++ or Cmd+= for zoom in
+                        std::cout << "Zoom in shortcut detected" << std::endl;
+                        if (m_browser && m_browser->IsValid()) {
+                            m_browser->GetHost()->Zoom(CEF_ZOOM_COMMAND_IN);
+                        }
+                        *is_keyboard_shortcut = true;
+                        return true;
+
+                    case '-':
+                        // Cmd+- for zoom out
+                        std::cout << "Zoom out shortcut detected" << std::endl;
+                        if (m_browser && m_browser->IsValid()) {
+                            m_browser->GetHost()->Zoom(CEF_ZOOM_COMMAND_OUT);
+                        }
+                        *is_keyboard_shortcut = true;
+                        return true;
+
+                    case '0':
+                        // Cmd+0 for reset zoom
+                        std::cout << "Zoom reset shortcut detected" << std::endl;
+                        if (m_browser && m_browser->IsValid()) {
+                            m_browser->GetHost()->Zoom(CEF_ZOOM_COMMAND_RESET);
+                        }
                         *is_keyboard_shortcut = true;
                         return true;
                 }
@@ -833,6 +862,44 @@ public:
         if (m_client) {
             m_client->select_all();
         }
+    }
+
+    void show_dev_tools() {
+        if (m_client && m_client->get_browser() && m_client->get_browser()->IsValid()) {
+            CefWindowInfo windowInfo;
+            CefRefPtr<CefClient> client;
+            CefBrowserSettings settings;
+
+            // Create the DevTools browser - CEF will handle the window creation
+            m_client->get_browser()->GetHost()->ShowDevTools(windowInfo, client, settings, CefPoint());
+        }
+    }
+
+    void zoom_in() {
+        if (m_client && m_client->get_browser() && m_client->get_browser()->IsValid()) {
+            m_client->get_browser()->GetHost()->Zoom(CEF_ZOOM_COMMAND_IN);
+        }
+    }
+
+    void zoom_out() {
+        if (m_client && m_client->get_browser() && m_client->get_browser()->IsValid()) {
+            m_client->get_browser()->GetHost()->Zoom(CEF_ZOOM_COMMAND_OUT);
+        }
+    }
+
+    void zoom_reset() {
+        if (m_client && m_client->get_browser() && m_client->get_browser()->IsValid()) {
+            m_client->get_browser()->GetHost()->Zoom(CEF_ZOOM_COMMAND_RESET);
+        }
+    }
+
+    double get_zoom_percentage() {
+        if (m_client && m_client->get_browser() && m_client->get_browser()->IsValid()) {
+            double zoom_level = m_client->get_browser()->GetHost()->GetZoomLevel();
+            // Convert zoom level to percentage: percentage = 100 * pow(1.2, zoom_level)
+            return 100.0 * std::pow(1.2, zoom_level);
+        }
+        return 100.0; // Default zoom
     }
 
     // Context menu methods
