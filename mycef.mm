@@ -96,6 +96,35 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 // descriptor->release(); // no need to release
             }
         }
+        else if (type == CefRenderHandler::PaintElementType::PET_POPUP && m_should_show_popup)
+        {
+            if (m_popup_texture && ((m_popup_texture_width != static_cast<uint32_t>(width) || m_popup_texture_height != static_cast<uint32_t>(height)) ||
+                                  m_popup_texture->iosurface() != io_surface))
+            {
+                m_popup_texture->release();
+                m_popup_texture = nullptr;
+            }
+
+            if (!m_popup_texture)
+            {
+                m_popup_texture_width = width;
+                m_popup_texture_height = height;
+
+                MTL::TextureDescriptor *descriptor = MTL::TextureDescriptor::texture2DDescriptor(
+                    MTL::PixelFormatBGRA8Unorm,
+                    width,
+                    height,
+                    false // mipmapped
+                );
+
+                // Set the usage and storage mode.
+                descriptor->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
+                descriptor->setStorageMode(MTL::StorageModeManaged);
+
+                // Create the popup texture directly from the IOSurface.
+                m_popup_texture = m_metal_device->newTexture(descriptor, io_surface, 0);
+            }
+        }
     };
 
     m_on_texture_ready = [this](CefRenderHandler::PaintElementType type, const CefRenderHandler::RectList &dirtyRects, const void *buffer, int width, int height)
@@ -190,9 +219,9 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 pTextureDesc->setStorageMode(MTL::StorageModeManaged);
                 pTextureDesc->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
 
-                m_texture = m_metal_device->newTexture(pTextureDesc);
+                m_popup_texture = m_metal_device->newTexture(pTextureDesc);
 
-                m_popup_texture->release();
+                pTextureDesc->release();
                 full_update = true;
             }
 

@@ -734,6 +734,27 @@ void SetupDockspace(ImGuiID dockspaceID)
         ImGui::Image(myFramebufferTextureID, contentSize, ImVec2(0, 0), ImVec2(1, 1));
         ImGui::End();
 
+        // Render popup window if popup texture is available
+        if (_app && _app->m_should_show_popup && _app->m_popup_texture)
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+            ImGuiWindowFlags popupFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize;
+
+            // Set popup window position based on popup rect
+            ImGui::SetNextWindowPos(ImVec2(_app->m_popup_pos.x, _app->m_popup_pos.y), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(_app->m_popup_pos.width, _app->m_popup_pos.height), ImGuiCond_Always);
+
+            if (ImGui::Begin("Popup Window", nullptr, popupFlags))
+            {
+                ImTextureID popupTextureID = reinterpret_cast<ImTextureID>(_app->m_popup_texture);
+                ImVec2 popupSize = ImVec2(_app->m_popup_pos.width, _app->m_popup_pos.height);
+                ImGui::Image(popupTextureID, popupSize, ImVec2(0, 0), ImVec2(1, 1));
+            }
+            ImGui::End();
+            ImGui::PopStyleVar(2);
+        }
+
         // Handle context menu as a regular ImGui window (not popup)
         static ImVec2 context_menu_pos = ImVec2(0, 0);
         static bool context_menu_pos_set = false;
