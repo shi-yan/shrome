@@ -160,6 +160,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     int viewportHeight;
     bool shouldHandleMouseEvents;
     bool shouldHandleKeyEvents;
+    bool isDragging; // Track if we're in a drag operation
 }
 
 - (instancetype)initWithFrame:(NSRect)frame device:(id<MTLDevice>)device
@@ -848,7 +849,7 @@ void SetupDockspace(ImGuiID dockspaceID)
         // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
         mouseEvent.x = mouseX;
         mouseEvent.y = mouseY;
-        mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+        mouseEvent.modifiers = [self convertModifiers:event];
 
         CefBrowserHost::MouseButtonType buttonType = CefBrowserHost::MouseButtonType::MBT_LEFT;
         if ([event buttonNumber] == 1)
@@ -861,6 +862,9 @@ void SetupDockspace(ImGuiID dockspaceID)
         }
 
         _app->inject_mouse_up_down(mouseEvent, buttonType, false, [event clickCount]);
+        
+        // Start drag tracking
+        isDragging = true;
     }
 }
 
@@ -877,7 +881,7 @@ void SetupDockspace(ImGuiID dockspaceID)
         // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
         mouseEvent.x = static_cast<int>(locationInView.x) - holeX;
         mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y) - holeY;
-        mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+        mouseEvent.modifiers = [self convertModifiers:event];
 
         CefBrowserHost::MouseButtonType buttonType = CefBrowserHost::MouseButtonType::MBT_LEFT;
         if ([event buttonNumber] == 1)
@@ -890,6 +894,9 @@ void SetupDockspace(ImGuiID dockspaceID)
         }
 
         _app->inject_mouse_up_down(mouseEvent, buttonType, true, [event clickCount]);
+        
+        // End drag tracking
+        isDragging = false;
     }
 }
 
@@ -925,7 +932,7 @@ void SetupDockspace(ImGuiID dockspaceID)
         // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
         mouseEvent.x = static_cast<int>(locationInView.x) - holeX;
         mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y) - holeY;
-        mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+        mouseEvent.modifiers = [self convertModifiers:event];
 
         int deltaX = static_cast<int>([event scrollingDeltaX]);
         int deltaY = static_cast<int>([event scrollingDeltaY]);
@@ -937,10 +944,12 @@ void SetupDockspace(ImGuiID dockspaceID)
     }
 }
 
-// Helper method to convert AppKit modifier flags to CEF modifier flags
-- (uint32_t)convertModifiers:(NSUInteger)appKitModifiers
+// Helper method to convert AppKit event to CEF modifier flags
+- (uint32_t)convertModifiers:(NSEvent*)event
 {
     uint32_t cefModifiers = 0;
+
+    NSUInteger appKitModifiers = [event modifierFlags];
 
     if (appKitModifiers & NSEventModifierFlagCommand)
     {
@@ -968,6 +977,27 @@ void SetupDockspace(ImGuiID dockspaceID)
     if (appKitModifiers & NSEventModifierFlagNumericPad)
     {
         cefModifiers |= EVENTFLAG_NUM_LOCK_ON;
+    }
+
+    // Mouse buttons - based on event type
+    switch ([event type]) {
+        case NSEventTypeLeftMouseDragged:
+        case NSEventTypeLeftMouseDown:
+        case NSEventTypeLeftMouseUp:
+            cefModifiers |= EVENTFLAG_LEFT_MOUSE_BUTTON;
+            break;
+        case NSEventTypeRightMouseDragged:
+        case NSEventTypeRightMouseDown:
+        case NSEventTypeRightMouseUp:
+            cefModifiers |= EVENTFLAG_RIGHT_MOUSE_BUTTON;
+            break;
+        case NSEventTypeOtherMouseDragged:
+        case NSEventTypeOtherMouseDown:
+        case NSEventTypeOtherMouseUp:
+            cefModifiers |= EVENTFLAG_MIDDLE_MOUSE_BUTTON;
+            break;
+        default:
+            break;
     }
 
     return cefModifiers;
@@ -998,7 +1028,7 @@ void SetupDockspace(ImGuiID dockspaceID)
     }
 
     keyEvent.native_key_code = [event keyCode];
-    keyEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+    keyEvent.modifiers = [self convertModifiers:event];
 }
 
 // Helper method to check if it's a key up event
@@ -1186,7 +1216,7 @@ void SetupDockspace(ImGuiID dockspaceID)
 
 - (void)mouseMoved:(NSEvent *)event
 {
-    if (shouldHandleMouseEvents == true)
+    if (shouldHandleMouseEvents == true || isDragging)
     {
         if (self.followMouse)
         {
@@ -1200,11 +1230,26 @@ void SetupDockspace(ImGuiID dockspaceID)
         // Convert from NSView coordinates (bottom-left origin) to CEF coordinates (top-left origin)
         mouseEvent.x = static_cast<int>(locationInView.x) - holeX;
         mouseEvent.y = static_cast<int>(self.bounds.size.height - locationInView.y) - holeY;
-        // std::cout << "mouse motion " << mouseEvent.x << ", " << mouseEvent.y << std::endl;
-        mouseEvent.modifiers = [self convertModifiers:[event modifierFlags]];
+        std::cout << "mouse motion raw: (" << locationInView.x << ", " << locationInView.y << ") converted: (" << mouseEvent.x << ", " << mouseEvent.y << ") holes: (" << holeX << ", " << holeY << ")" << std::endl;
+        mouseEvent.modifiers = [self convertModifiers:event];
 
         _app->inject_mouse_motion(mouseEvent);
     }
+}
+
+- (void)mouseDragged:(NSEvent *)event
+{
+    [self mouseMoved:event];
+}
+
+- (void)rightMouseDragged:(NSEvent *)event
+{
+    [self mouseMoved:event];
+}
+
+- (void)otherMouseDragged:(NSEvent *)event
+{
+    [self mouseMoved:event];
 }
 
 - (void)updateTrackingAreas
