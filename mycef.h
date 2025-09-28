@@ -14,6 +14,7 @@
 #include <functional>
 #include <cmath>
 #include "imgui.h"
+#include <Metal/Metal.hpp>
 
 //--off-screen-rendering-enabled
 
@@ -716,6 +717,12 @@ public:
     uint32_t m_popup_texture_width = 0;
     uint32_t m_popup_texture_height = 0;
 
+    // Framebuffer for compositing main texture + popup
+    MTL::Texture *m_composite_texture = nullptr;
+    uint32_t m_composite_width = 0;
+    uint32_t m_composite_height = 0;
+    MTL::CommandQueue *m_command_queue = nullptr;
+
     uint32_t m_window_width = 1280;
     uint32_t m_window_height = 720;
     uint32_t m_pixel_density = 1;
@@ -741,7 +748,7 @@ public:
     // CefApp methods
     CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override
     {
-        return this;
+        return static_cast<CefBrowserProcessHandler*>(this);
     }
 
     // CefBrowserProcessHandler methods
@@ -1049,6 +1056,9 @@ public:
                                        CefRefPtr<CefCommandLine> command_line) override;
 
     void encode_render_command(MTL::RenderCommandEncoder *render_command_encoder);
+    void create_composite_framebuffer();
+    void composite_textures_to_framebuffer();
+    void prepare_for_render();
 
     // This is the magic hook provided by CEF, with the correct name.
     void OnScheduleMessagePumpWork(int64_t delay_ms) override;

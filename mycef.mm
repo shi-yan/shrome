@@ -125,6 +125,9 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 m_popup_texture = m_metal_device->newTexture(descriptor, io_surface, 0);
             }
         }
+
+        // Create composite framebuffer when needed
+        create_composite_framebuffer();
     };
 
     m_on_texture_ready = [this](CefRenderHandler::PaintElementType type, const CefRenderHandler::RectList &dirtyRects, const void *buffer, int width, int height)
@@ -264,6 +267,9 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 }
             }
         }
+
+        // Create composite framebuffer when needed
+        create_composite_framebuffer();
     };
 }
 
@@ -336,6 +342,18 @@ MyApp::~MyApp()
         m_popup_texture = nullptr;
     }
 
+    if (m_composite_texture)
+    {
+        m_composite_texture->release();
+        m_composite_texture = nullptr;
+    }
+
+    if (m_command_queue)
+    {
+        m_command_queue->release();
+        m_command_queue = nullptr;
+    }
+
     if (m_triangle_vertex_buffer)
     {
         m_triangle_vertex_buffer->release();
@@ -377,6 +395,12 @@ void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t wind
     m_metal_device = metal_device;
     m_window_width = window_width;
     m_window_height = window_height;
+
+    // Create reusable command queue
+    if (!m_command_queue)
+    {
+        m_command_queue = m_metal_device->newCommandQueue();
+    }
 
     simd::float4 quad_vertices[] = {
         {-1.0f, -1.0f, 0.0f, 1.0f},
@@ -459,29 +483,32 @@ void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t wind
     std::cout << "Render pipeline state created successfully." << std::endl;
 }
 
+void MyApp::prepare_for_render()
+{
+    // Composite textures if popup is visible
+    if (m_should_show_popup && m_popup_texture && m_composite_texture)
+    {
+        composite_textures_to_framebuffer();
+    }
+}
+
 void MyApp::encode_render_command(MTL::RenderCommandEncoder *render_command_encoder)
 {
-    if (m_texture)
-    {
-        render_command_encoder->setRenderPipelineState(m_render_pipeline);
-        render_command_encoder->setDepthStencilState(m_depth_stencil_state_disabled);
-        render_command_encoder->setVertexBuffer(m_triangle_vertex_buffer, 0, 0);
-        render_command_encoder->setCullMode(MTL::CullMode::CullModeNone);
-        render_command_encoder->setFragmentTexture(m_texture, /* index */ 0);
-        NS::UInteger vertexStart = 0;
-        NS::UInteger vertexCount = 4;
-        render_command_encoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, vertexStart, vertexCount);
-        // std::cout << "draw cef texture " << m_texture_width << ", " << m_texture_height << std::endl;
-        if (m_should_show_popup && m_popup_texture && m_popup_triangle_vertex_buffer && m_popup_offset_buffer)
-        {
-            render_command_encoder->setVertexBuffer(m_popup_triangle_vertex_buffer, 0, 0);
-            render_command_encoder->setVertexBuffer(m_popup_offset_buffer, 0, 2);
-            render_command_encoder->setCullMode(MTL::CullMode::CullModeNone);
-            render_command_encoder->setFragmentTexture(m_popup_texture, /* index */ 0);
+    if (!m_texture)
+        return;
 
-            render_command_encoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, vertexStart, vertexCount);
-        }
-    }
+    // Use composite texture if popup is visible, otherwise main texture
+    MTL::Texture *texture_to_render = (m_should_show_popup && m_popup_texture && m_composite_texture)
+                                       ? m_composite_texture : m_texture;
+
+    render_command_encoder->setRenderPipelineState(m_render_pipeline);
+    render_command_encoder->setDepthStencilState(m_depth_stencil_state_disabled);
+    render_command_encoder->setVertexBuffer(m_triangle_vertex_buffer, 0, 0);
+    render_command_encoder->setCullMode(MTL::CullMode::CullModeNone);
+    render_command_encoder->setFragmentTexture(texture_to_render, /* index */ 0);
+    NS::UInteger vertexStart = 0;
+    NS::UInteger vertexCount = 4;
+    render_command_encoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, vertexStart, vertexCount);
 }
 
 void MyClient::OnAfterCreated(CefRefPtr<CefBrowser> browser)
@@ -543,4 +570,89 @@ void MyApp::OnScheduleMessagePumpWork(int64_t delay_ms)
                          CefDoMessageLoopWork();
                        });
     }
+}
+
+void MyApp::create_composite_framebuffer()
+{
+    // Create or recreate composite texture if dimensions changed
+    if (m_composite_texture &&
+        (m_composite_width != m_window_width || m_composite_height != m_window_height))
+    {
+        m_composite_texture->release();
+        m_composite_texture = nullptr;
+    }
+
+    if (!m_composite_texture && m_window_width > 0 && m_window_height > 0)
+    {
+        m_composite_width = m_window_width;
+        m_composite_height = m_window_height;
+
+        MTL::TextureDescriptor *descriptor = MTL::TextureDescriptor::texture2DDescriptor(
+            MTL::PixelFormatBGRA8Unorm,
+            m_composite_width,
+            m_composite_height,
+            false // mipmapped
+        );
+
+        descriptor->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead | MTL::TextureUsageRenderTarget);
+        descriptor->setStorageMode(MTL::StorageModePrivate);
+
+        m_composite_texture = m_metal_device->newTexture(descriptor);
+    }
+}
+
+void MyApp::composite_textures_to_framebuffer()
+{
+    if (!m_composite_texture || !m_texture || !m_command_queue)
+        return;
+
+    // Create command buffer
+    MTL::CommandBuffer *command_buffer = m_command_queue->commandBuffer();
+    if (!command_buffer)
+        return;
+
+    // Create render pass descriptor
+    MTL::RenderPassDescriptor *render_pass = MTL::RenderPassDescriptor::alloc()->init();
+    if (!render_pass)
+    {
+        return;
+    }
+
+    render_pass->colorAttachments()->object(0)->setTexture(m_composite_texture);
+    render_pass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
+    render_pass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 0.0));
+    render_pass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
+
+    MTL::RenderCommandEncoder *render_encoder = command_buffer->renderCommandEncoder(render_pass);
+    if (!render_encoder)
+    {
+        render_pass->release();
+        return;
+    }
+
+    // First render the main texture (full screen quad)
+    render_encoder->setRenderPipelineState(m_render_pipeline);
+    render_encoder->setDepthStencilState(m_depth_stencil_state_disabled);
+    render_encoder->setVertexBuffer(m_triangle_vertex_buffer, 0, 0);
+    render_encoder->setCullMode(MTL::CullMode::CullModeNone);
+    render_encoder->setFragmentTexture(m_texture, 0);
+    render_encoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, NS::UInteger(0), NS::UInteger(4));
+
+    // If popup is visible, render it on top
+    if (m_should_show_popup && m_popup_texture && m_popup_triangle_vertex_buffer && m_popup_offset_buffer)
+    {
+        render_encoder->setVertexBuffer(m_popup_triangle_vertex_buffer, 0, 0);
+        render_encoder->setVertexBuffer(m_popup_offset_buffer, 0, 2);
+        render_encoder->setCullMode(MTL::CullMode::CullModeNone);
+        render_encoder->setFragmentTexture(m_popup_texture, 0);
+        render_encoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, NS::UInteger(0), NS::UInteger(4));
+    }
+
+    render_encoder->endEncoding();
+    command_buffer->commit();
+
+    // Don't wait for completion - let it run asynchronously
+    // command_buffer->waitUntilCompleted();
+
+    render_pass->release();
 }

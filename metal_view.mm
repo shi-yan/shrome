@@ -228,6 +228,22 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 
         [[CEFManager sharedManager] registerApp:_app];
 
+        // Set up notification observers for focus handling
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(windowDidBecomeKey:)
+                                                     name:NSWindowDidBecomeKeyNotification
+                                                   object:nil];
+
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(windowDidResignKey:)
+                                                     name:NSWindowDidResignKeyNotification
+                                                   object:nil];
+
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(applicationDidBecomeActive:)
+                                                     name:NSApplicationDidBecomeActiveNotification
+                                                   object:nil];
+
         // CefDoMessageLoopWork();
     }
     return self;
@@ -247,7 +263,7 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     int argc = 0;
     char **argv = nullptr; // Dummy argument for CEF
     CefMainArgs main_args(argc, argv);
-    int exit_code = CefExecuteProcess(main_args, _app.get(), nullptr);
+    int exit_code = CefExecuteProcess(main_args, _app, nullptr);
     if (exit_code >= 0)
     {
         // The sub-process has exited, so the main process should also exit.
@@ -390,6 +406,9 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
 {
     NSLog(@"MainMetalView cleanup called");
 
+    // Remove notification observers
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+
     if (_app)
     {
         _app->close(true);
@@ -417,6 +436,56 @@ matrix_float4x4 matrix_ortho(float left, float right, float bottom, float top, f
     ImGui::DestroyContext();
     self.delegate = nil;
     _myInputContext = nil;
+}
+
+#pragma mark - Focus and Window Notifications
+
+- (void)windowDidBecomeKey:(NSNotification *)notification
+{
+    // Only respond to notifications from our window
+    if (notification.object == self.window)
+    {
+        NSLog(@"MainMetalView window became key - trying to become first responder");
+
+        // Try to become first responder
+        [self.window makeFirstResponder:self];
+
+        // Reset event handling flags
+        shouldHandleMouseEvents = true;
+        shouldHandleKeyEvents = true;
+
+        // Notify CEF that we regained focus
+        if (_app && _app->get_browser())
+        {
+            _app->get_browser()->GetHost()->SetFocus(true);
+        }
+    }
+}
+
+- (void)windowDidResignKey:(NSNotification *)notification
+{
+    // Only respond to notifications from our window
+    if (notification.object == self.window)
+    {
+        NSLog(@"MainMetalView window resigned key");
+
+        // Notify CEF that we lost focus
+        if (_app && _app->get_browser())
+        {
+            _app->get_browser()->GetHost()->SetFocus(false);
+        }
+    }
+}
+
+- (void)applicationDidBecomeActive:(NSNotification *)notification
+{
+    NSLog(@"Application became active");
+
+    // App regained focus - try to reclaim first responder if our window is key
+    if (self.window.isKeyWindow)
+    {
+        [self.window makeFirstResponder:self];
+    }
 }
 
 void SetupDockspace(ImGuiID dockspaceID)
@@ -689,6 +758,12 @@ void SetupDockspace(ImGuiID dockspaceID)
         if (ImGui::IsWindowHovered())
         {
             shouldHandleMouseEvents = true;
+
+            // If we should be handling events but aren't first responder, try to reclaim
+            if (self.window.isKeyWindow && self.window.firstResponder != self)
+            {
+                [self.window makeFirstResponder:self];
+            }
         }
         else
         {
@@ -699,6 +774,12 @@ void SetupDockspace(ImGuiID dockspaceID)
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
         {
             shouldHandleKeyEvents = true;
+
+            // If we should be handling events but aren't first responder, try to reclaim
+            if (self.window.isKeyWindow && self.window.firstResponder != self)
+            {
+                [self.window makeFirstResponder:self];
+            }
         }
         else
         {
@@ -729,31 +810,22 @@ void SetupDockspace(ImGuiID dockspaceID)
             holeHeight = contentSize.y;
         }
 
-        // Display the framebuffer texture
-        ImTextureID myFramebufferTextureID = reinterpret_cast<ImTextureID>(_app->m_texture);
-        ImGui::Image(myFramebufferTextureID, contentSize, ImVec2(0, 0), ImVec2(1, 1));
-        ImGui::End();
-
-        // Render popup window if popup texture is available
-        if (_app && _app->m_should_show_popup && _app->m_popup_texture)
+        // Prepare rendering (composite if needed)
+        if (_app)
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-            ImGuiWindowFlags popupFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize;
-
-            // Set popup window position based on popup rect
-            ImGui::SetNextWindowPos(ImVec2(_app->m_popup_pos.x, _app->m_popup_pos.y), ImGuiCond_Always);
-            ImGui::SetNextWindowSize(ImVec2(_app->m_popup_pos.width, _app->m_popup_pos.height), ImGuiCond_Always);
-
-            if (ImGui::Begin("Popup Window", nullptr, popupFlags))
-            {
-                ImTextureID popupTextureID = reinterpret_cast<ImTextureID>(_app->m_popup_texture);
-                ImVec2 popupSize = ImVec2(_app->m_popup_pos.width, _app->m_popup_pos.height);
-                ImGui::Image(popupTextureID, popupSize, ImVec2(0, 0), ImVec2(1, 1));
-            }
-            ImGui::End();
-            ImGui::PopStyleVar(2);
+            _app->prepare_for_render();
         }
+
+        // Display the composite texture (main + popup) or fall back to main texture
+        MTL::Texture *display_texture = (_app && _app->m_should_show_popup && _app->m_popup_texture && _app->m_composite_texture)
+                                        ? _app->m_composite_texture : (_app ? _app->m_texture : nullptr);
+
+        if (display_texture)
+        {
+            ImTextureID myFramebufferTextureID = reinterpret_cast<ImTextureID>(display_texture);
+            ImGui::Image(myFramebufferTextureID, contentSize, ImVec2(0, 0), ImVec2(1, 1));
+        }
+        ImGui::End();
 
         // Handle context menu as a regular ImGui window (not popup)
         static ImVec2 context_menu_pos = ImVec2(0, 0);
@@ -880,6 +952,39 @@ void SetupDockspace(ImGuiID dockspaceID)
 - (BOOL)acceptsFirstResponder
 {
     return YES;
+}
+
+- (BOOL)becomeFirstResponder
+{
+    BOOL result = [super becomeFirstResponder];
+    if (result)
+    {
+        NSLog(@"MainMetalView became first responder");
+
+        // Reset event handling state
+        shouldHandleMouseEvents = true;
+        shouldHandleKeyEvents = true;
+
+        // Notify CEF
+        if (_app && _app->get_browser())
+        {
+            _app->get_browser()->GetHost()->SetFocus(true);
+        }
+    }
+    return result;
+}
+
+- (BOOL)resignFirstResponder
+{
+    NSLog(@"MainMetalView resigned first responder");
+
+    // Notify CEF
+    if (_app && _app->get_browser())
+    {
+        _app->get_browser()->GetHost()->SetFocus(false);
+    }
+
+    return [super resignFirstResponder];
 }
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event
