@@ -731,8 +731,10 @@ public:
     MTL::DepthStencilState *m_depth_stencil_state_disabled = nullptr;
     // MTL::Buffer *m_triangle_vertex_buffer = nullptr;
     MTL::Buffer *m_popup_triangle_vertex_buffer = nullptr;
+    MTL::Buffer *m_popup_projection_buffer = nullptr;
 
     MTL::RenderPipelineState *m_render_pipeline = nullptr;
+    MTL::RenderPipelineState *m_popup_render_pipeline = nullptr;
 
     RenderingCallback m_on_texture_ready;
     AcceleratedRenderingCallback m_on_accelerated_texture_ready;
@@ -779,7 +781,7 @@ public:
 
         // Create the offscreen browser
         // You might want to load a specific URL here instead of "about:blank"
-        CefBrowserHost::CreateBrowser(window_info, m_client, "https://www.youtube.com/watch?v=aDdgU2gPtQQ", browser_settings, nullptr, nullptr); // [1]
+        CefBrowserHost::CreateBrowser(window_info, m_client, "https://www.geeksforgeeks.org/javascript/how-to-create-a-dropdown-list-with-array-values-using-javascript/", browser_settings, nullptr, nullptr); // [1]
     }
 
     void close(bool force_close)
@@ -974,7 +976,17 @@ public:
     {
         if (m_client)
         {
-            m_client->inject_mouse_motion(motion);
+            CefMouseEvent adjusted_motion = motion;
+
+            // Check if mouse is over popup and apply offset
+            if (is_over_popup(adjusted_motion.x, adjusted_motion.y))
+            {
+                std::cout << "Mouse over popup at (" << adjusted_motion.x << ", " << adjusted_motion.y << ")";
+                apply_popup_offset(adjusted_motion.x, adjusted_motion.y);
+                std::cout << " -> adjusted to (" << adjusted_motion.x << ", " << adjusted_motion.y << ")" << std::endl;
+            }
+
+            m_client->inject_mouse_motion(adjusted_motion);
         }
     }
 
@@ -1064,6 +1076,11 @@ public:
     void OnScheduleMessagePumpWork(int64_t delay_ms) override;
 
     void update_geometry(int holeX, int holeY, int holeWidth, int holeHeight, int viewportWidth, int viewportHeight);
+    void update_popup_projection_matrix();
+
+    // Helper methods for popup mouse event handling
+    bool is_over_popup(int x, int y) const;
+    void apply_popup_offset(int& x, int& y) const;
 
 private:
     IMPLEMENT_REFCOUNTING(MyApp);

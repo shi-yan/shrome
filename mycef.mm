@@ -29,20 +29,26 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
     m_popup_sized_callback = [this](const CefRect &rect)
     {
         m_popup_pos = rect;
-        simd::float2 offset = {m_popup_pos.x, m_popup_pos.y};
+        // Scale offset by pixel density (CEF uses logical pixels, we render in physical pixels)
+        simd::float2 offset = {m_popup_pos.x * m_pixel_density, m_popup_pos.y * m_pixel_density};
 
         if (m_popup_offset_buffer == nullptr)
         {
             m_popup_offset_buffer = m_metal_device->newBuffer(sizeof(simd::float2), MTL::ResourceStorageModeShared);
         }
         memcpy(m_popup_offset_buffer->contents(), &offset, sizeof(simd::float2));
+        std::cout << "should show pupup at " << m_popup_pos.x << ", " << m_popup_pos.y << std::endl;
         std::cout << "should show popup size " << m_popup_pos.width << ", " << m_popup_pos.height << std::endl;
+
+        // Scale popup size by pixel density
+        float scaled_width = m_popup_pos.width * m_pixel_density;
+        float scaled_height = m_popup_pos.height * m_pixel_density;
 
         simd::float4 quad_vertices[] = {
             {0.0f, 0.0f, 0.0f, 0.0f},
-            {0.0f, m_popup_pos.height, 0.0f, 1.0f},
-            {m_popup_pos.width, 0.0f, 1.0f, 0.0f},
-            {m_popup_pos.width, m_popup_pos.height, 1.0f, 1.0f}};
+            {0.0f, scaled_height, 0.0f, 1.0f},
+            {scaled_width, 0.0f, 1.0f, 0.0f},
+            {scaled_width, scaled_height, 1.0f, 1.0f}};
         if (!m_popup_triangle_vertex_buffer)
         {
             m_popup_triangle_vertex_buffer = m_metal_device->newBuffer(&quad_vertices,
@@ -51,7 +57,7 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
         }
         else
         {
-            memcpy(m_popup_triangle_vertex_buffer->contents(), &offset, sizeof(quad_vertices));
+            memcpy(m_popup_triangle_vertex_buffer->contents(), &quad_vertices, sizeof(quad_vertices));
         }
     };
 
@@ -92,6 +98,9 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 // The key function: Create the texture directly from the IOSurface.
                 // This creates a Metal texture that aliases the memory of the IOSurface.
                 m_texture = m_metal_device->newTexture(descriptor, io_surface, 0);
+
+                // Update projection matrix for popup rendering
+                update_popup_projection_matrix();
 
                 // descriptor->release(); // no need to release
             }
@@ -159,6 +168,10 @@ MyApp::MyApp(MTL::Device *metal_device, uint32_t window_width, uint32_t window_h
                 m_texture = m_metal_device->newTexture(pTextureDesc);
 
                 pTextureDesc->release();
+
+                // Update projection matrix for popup rendering
+                update_popup_projection_matrix();
+
                 full_update = true;
             }
 
@@ -365,6 +378,18 @@ MyApp::~MyApp()
         m_popup_triangle_vertex_buffer->release();
         m_popup_triangle_vertex_buffer = nullptr;
     }
+
+    if (m_popup_projection_buffer)
+    {
+        m_popup_projection_buffer->release();
+        m_popup_projection_buffer = nullptr;
+    }
+
+    if (m_popup_render_pipeline)
+    {
+        m_popup_render_pipeline->release();
+        m_popup_render_pipeline = nullptr;
+    }
 }
 
 MyRenderHandler::MyRenderHandler(bool accelerated_rendering, int width, int height, int pixel_density,
@@ -477,8 +502,40 @@ void MyApp::init(MTL::Device *metal_device, uint64_t pixel_format, uint32_t wind
 
     render_pipeline_descriptor->release();
     vertex_shader->release();
+
+    // Create popup pipeline with popup vertex shader
+    MTL::Function *popup_vertex_shader = metal_default_library->newFunction(NS::String::string("cefPopupVertexShader", NS::ASCIIStringEncoding));
+    assert(popup_vertex_shader);
+
+    MTL::RenderPipelineDescriptor *popup_pipeline_descriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+    popup_pipeline_descriptor->setLabel(NS::String::string("Popup Rendering Pipeline", NS::ASCIIStringEncoding));
+    popup_pipeline_descriptor->setVertexFunction(popup_vertex_shader);
+    popup_pipeline_descriptor->setFragmentFunction(fragment_shader); // Reuse fragment shader
+
+    // Enable blending for popup transparency
+    popup_pipeline_descriptor->colorAttachments()->object(0)->setBlendingEnabled(true);
+    popup_pipeline_descriptor->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+    popup_pipeline_descriptor->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+    popup_pipeline_descriptor->colorAttachments()->object(0)->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
+    popup_pipeline_descriptor->colorAttachments()->object(0)->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+    popup_pipeline_descriptor->colorAttachments()->object(0)->setPixelFormat(static_cast<MTL::PixelFormat>(pixel_format));
+
+    m_popup_render_pipeline = metal_device->newRenderPipelineState(popup_pipeline_descriptor, &error);
+
+    popup_pipeline_descriptor->release();
+    popup_vertex_shader->release();
     fragment_shader->release();
     metal_default_library->release();
+
+    // Create projection matrix buffer (orthographic projection from pixel coordinates to NDC)
+    // Matrix converts from (0,0)-(width,height) to (-1,-1)-(1,1)
+    simd::float4x4 projection_matrix = {
+        simd::float4{2.0f / m_window_width, 0.0f, 0.0f, 0.0f},
+        simd::float4{0.0f, -2.0f / m_window_height, 0.0f, 0.0f},
+        simd::float4{0.0f, 0.0f, 1.0f, 0.0f},
+        simd::float4{-1.0f, 1.0f, 0.0f, 1.0f}
+    };
+    m_popup_projection_buffer = m_metal_device->newBuffer(&projection_matrix, sizeof(simd::float4x4), MTL::ResourceStorageModeShared);
 
     std::cout << "Render pipeline state created successfully." << std::endl;
 }
@@ -638,11 +695,14 @@ void MyApp::composite_textures_to_framebuffer()
     render_encoder->setFragmentTexture(m_texture, 0);
     render_encoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, NS::UInteger(0), NS::UInteger(4));
 
-    // If popup is visible, render it on top
-    if (m_should_show_popup && m_popup_texture && m_popup_triangle_vertex_buffer && m_popup_offset_buffer)
+    // If popup is visible, render it on top with popup pipeline
+    if (m_should_show_popup && m_popup_texture && m_popup_triangle_vertex_buffer &&
+        m_popup_offset_buffer && m_popup_render_pipeline && m_popup_projection_buffer)
     {
+        render_encoder->setRenderPipelineState(m_popup_render_pipeline);
         render_encoder->setVertexBuffer(m_popup_triangle_vertex_buffer, 0, 0);
         render_encoder->setVertexBuffer(m_popup_offset_buffer, 0, 2);
+        render_encoder->setVertexBuffer(m_popup_projection_buffer, 0, 3);
         render_encoder->setCullMode(MTL::CullMode::CullModeNone);
         render_encoder->setFragmentTexture(m_popup_texture, 0);
         render_encoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, NS::UInteger(0), NS::UInteger(4));
@@ -655,4 +715,39 @@ void MyApp::composite_textures_to_framebuffer()
     // command_buffer->waitUntilCompleted();
 
     render_pass->release();
+}
+
+void MyApp::update_popup_projection_matrix()
+{
+    if (!m_popup_projection_buffer)
+        return;
+
+    // Update projection matrix based on current window dimensions
+    simd::float4x4 projection_matrix = {
+        simd::float4{2.0f / m_window_width, 0.0f, 0.0f, 0.0f},
+        simd::float4{0.0f, -2.0f / m_window_height, 0.0f, 0.0f},
+        simd::float4{0.0f, 0.0f, 1.0f, 0.0f},
+        simd::float4{-1.0f, 1.0f, 0.0f, 1.0f}
+    };
+    memcpy(m_popup_projection_buffer->contents(), &projection_matrix, sizeof(simd::float4x4));
+}
+
+bool MyApp::is_over_popup(int x, int y) const
+{
+    if (!m_should_show_popup)
+        return false;
+
+    // Both m_popup_pos and mouse coordinates (x, y) are in logical pixels
+    int popup_right = m_popup_pos.x + m_popup_pos.width;
+    int popup_bottom = m_popup_pos.y + m_popup_pos.height;
+
+    return (x >= m_popup_pos.x) && (x < popup_right) && (y >= m_popup_pos.y) && (y < popup_bottom);
+}
+
+void MyApp::apply_popup_offset(int& x, int& y) const
+{
+    // According to CEF example, we need to apply an offset when over popup
+    // The offset is the difference between original popup rect and current popup rect
+    // For now, we don't track original_popup_rect separately, so offset is 0
+    // This would be needed if popup position changes after being shown
 }
